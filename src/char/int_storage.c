@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // GP_BOUND_ITEMS
 #include "int_storage.h"
@@ -10,7 +34,7 @@
 #include "char/char.h"
 #include "char/inter.h"
 #include "char/mapif.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -24,6 +48,7 @@
 #define STORAGE_MEMINC 16
 
 struct inter_storage_interface inter_storage_s;
+struct inter_storage_interface *inter_storage;
 
 /// Save storage data to sql
 int inter_storage_tosql(int account_id, struct storage_data* p)
@@ -77,7 +102,7 @@ int inter_storage_fromsql(int account_id, struct storage_data* p)
 	p->storage_amount = i;
 	SQL->FreeResult(inter->sql_handle);
 
-	ShowInfo("storage load complete from DB - id: %d (total: %d)\n", account_id, p->storage_amount);
+	ShowInfo("Armazem completamente carregado do DB - id: %d (total: %d)\n", account_id, p->storage_amount);
 	return 1;
 }
 
@@ -86,7 +111,7 @@ int inter_storage_guild_storage_tosql(int guild_id, struct guild_storage* p)
 {
 	nullpo_ret(p);
 	chr->memitemdata_to_sql(p->items, MAX_GUILD_STORAGE, guild_id, TABLE_GUILD_STORAGE);
-	ShowInfo ("guild storage save to DB - guild: %d\n", guild_id);
+	ShowInfo ("Armazem do cla salvo no DB - Cla: %d\n", guild_id);
 	return 0;
 }
 
@@ -135,7 +160,7 @@ int inter_storage_guild_storage_fromsql(int guild_id, struct guild_storage* p)
 	p->storage_amount = i;
 	SQL->FreeResult(inter->sql_handle);
 
-	ShowInfo("guild storage load complete from DB - id: %d (total: %d)\n", guild_id, p->storage_amount);
+	ShowInfo("Armazem do cla completamente carregado no DB - id: %d (total: %d)\n", guild_id, p->storage_amount);
 	return 0;
 }
 
@@ -225,7 +250,7 @@ int mapif_parse_SaveGuildStorage(int fd)
 	len = RFIFOW(fd,2);
 
 	if (sizeof(struct guild_storage) != len - 12) {
-		ShowError("inter storage: data size mismatch: %d != %"PRIuS"\n", len - 12, sizeof(struct guild_storage));
+		ShowError("inter storage: Incompatibilidade no tamanho dos dados: %d != %"PRIuS"\n", len - 12, sizeof(struct guild_storage));
 	} else {
 		if (SQL_ERROR == SQL->Query(inter->sql_handle, "SELECT `guild_id` FROM `%s` WHERE `guild_id`='%d'", guild_db, guild_id)) {
 			Sql_ShowDebug(inter->sql_handle);

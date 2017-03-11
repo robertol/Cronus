@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // GP_BOUND_ITEMS
 #include "guild.h"
@@ -23,7 +47,7 @@
 #include "common/HPM.h"
 #include "common/cbasetypes.h"
 #include "common/ers.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mapindex.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -36,6 +60,7 @@
 #include <string.h>
 
 struct guild_interface guild_s;
+struct guild_interface *guild;
 
 /*==========================================
  * Retrieves and validates the sd pointer for this guild member [Skotlex]
@@ -82,7 +107,7 @@ bool guild_read_guildskill_tree_db(char* split[], int columns, int current)
 
 	if( id < 0 || id >= MAX_GUILDSKILL )
 	{
-		ShowWarning("guild_read_guildskill_tree_db: Invalid skill id %d.\n", skill_id);
+		ShowWarning("guild_read_guildskill_tree_db: ID de habilidade invalida %d.\n", skill_id);
 		return false;
 	}
 
@@ -226,7 +251,7 @@ int guild_getposition(struct guild* g, struct map_session_data* sd)
 
 	if( g == NULL && (g=sd->guild) == NULL )
 		return -1;
-	
+
 	ARR_FIND( 0, g->max_member, i, g->member[i].account_id == sd->status.account_id && g->member[i].char_id == sd->status.char_id );
 	return( i < g->max_member ) ? g->member[i].position : -1;
 }
@@ -262,7 +287,7 @@ int guild_payexp_timer_sub(DBKey key, DBData *data, va_list ap) {
 	struct guild *g;
 
 	c = DB->data2ptr(data);
-	
+
 	if (
 		(g = guild->search(c->guild_id)) == NULL ||
 		(i = guild->getindex(g, c->account_id, c->char_id)) < 0
@@ -426,7 +451,7 @@ int guild_check_member(struct guild *g)
 		if (i < 0) {
 			sd->status.guild_id=0;
 			sd->guild_emblem_id=0;
-			ShowWarning("guild: check_member %d[%s] is not member\n",sd->status.account_id,sd->status.name);
+			ShowWarning("guild: check_member %d[%s] nao e um membro\n",sd->status.account_id,sd->status.name);
 		}
 	}
 	mapit->free(iter);
@@ -474,7 +499,7 @@ int guild_recv_info(struct guild *sg) {
 			if (channel->config->ally_autojoin) {
 				struct s_mapiterator* iter = mapit_getallusers();
 				struct guild *tg[MAX_GUILDALLIANCE];
-				
+
 				for (i = 0; i < MAX_GUILDALLIANCE; i++) {
 					tg[i] = NULL;
 					if( sg->alliance[i].opposition == 0 && sg->alliance[i].guild_id )
@@ -506,11 +531,8 @@ int guild_recv_info(struct guild *sg) {
 						}
 					}
 				}
-				
 				mapit->free(iter);
-				
 			}
-			
 			aChSysSave = chan;
 
 		}
@@ -539,16 +561,16 @@ int guild_recv_info(struct guild *sg) {
 			instances_save = g->instances;
 	}
 	memcpy(g,sg,sizeof(struct guild));
-	
+
 	g->channel = aChSysSave;
 	g->instance = instance_save;
 	g->instances = instances_save;
-	
+
 	if(g->max_member > MAX_GUILD) {
-		ShowError("guild_recv_info: Received guild with %d members, but MAX_GUILD is only %d. Extra guild-members have been lost!\n", g->max_member, MAX_GUILD);
+		ShowError("guild_recv_info: Recebido guild com %d membros, mas MAX_GUILD e apenas de %d. Membros extras foram perdidos!\n", g->max_member, MAX_GUILD);
 		g->max_member = MAX_GUILD;
 	}
-	
+
 	for(i=bm=m=0;i<g->max_member;i++){
 		if(g->member[i].account_id>0){
 			sd = g->member[i].sd = guild->sd_check(g->guild_id, g->member[i].account_id, g->member[i].char_id);
@@ -622,7 +644,7 @@ int guild_invite(struct map_session_data *sd, struct map_session_data *tsd) {
 			return 0;
 		}
 	}
-	
+
 	if (!tsd->fd) { //You can't invite someone who has already disconnected.
 		clif->guild_inviteack(sd,1);
 		return 0;
@@ -734,12 +756,11 @@ void guild_member_joined(struct map_session_data *sd)
 	if (i == -1)
 		sd->status.guild_id = 0;
 	else {
-		
 		g->member[i].sd = sd;
 		sd->guild = g;
-		
+
 		if (channel->config->ally && channel->config->ally_autojoin) {
-			channel->join(g->channel, sd, NULL, true);
+			channel->join(g->channel, sd, "", true);
 		}
 
 	}
@@ -758,7 +779,7 @@ int guild_member_added(int guild_id,int account_id,int char_id,int flag) {
 	if(sd==NULL || sd->guild_invite==0){
 		// cancel if player not present or invalid guild_id invitation
 		if (flag == 0) {
-			ShowError("guild: member added error %d is not online\n",account_id);
+			ShowError("guild: erro em adicao do membro %d, nao esta conectado\n",account_id);
 			intif->guild_leave(guild_id,account_id,char_id,0,"** Data Error **");
 		}
 		return 0;
@@ -867,7 +888,7 @@ int guild_member_withdraw(int guild_id, int account_id, int char_id, int flag, c
 
 	if(g == NULL)
 		return 0; // no such guild (error!)
-	
+
 	i = guild->getindex(g, account_id, char_id);
 	if( i == -1 )
 		return 0; // not a member (inconsistency!)
@@ -875,7 +896,7 @@ int guild_member_withdraw(int guild_id, int account_id, int char_id, int flag, c
 	online_member_sd = guild->getavailablesd(g);
 	if(online_member_sd == NULL)
 		return 0; // no one online to inform
-		
+
 #ifdef GP_BOUND_ITEMS
 	//Guild bound item check
 	guild->retrieveitembound(char_id,account_id,guild_id);
@@ -939,9 +960,9 @@ void guild_retrieveitembound(int char_id,int aid,int guild_id) {
 int guild_send_memberinfoshort(struct map_session_data *sd,int online)
 { // cleaned up [LuzZza]
 	struct guild *g;
-	
+
 	nullpo_ret(sd);
-		
+
 	if(sd->status.guild_id <= 0)
 		return 0;
 
@@ -956,10 +977,10 @@ int guild_send_memberinfoshort(struct map_session_data *sd,int online)
 		if(i>=0)
 			g->member[i].sd=NULL;
 		else
-			ShowError("guild_send_memberinfoshort: Failed to locate member %d:%d in guild %d!\n", sd->status.account_id, sd->status.char_id, g->guild_id);
+			ShowError("guild_send_memberinfoshort: Falha em localizar membro %d:%d na guild %d!\n", sd->status.account_id, sd->status.char_id, g->guild_id);
 		return 0;
 	}
-	
+
 	if (sd->state.connect_new) {
 		//Note that this works because it is invoked in parse_LoadEndAck before connect_new is cleared.
 		clif->guild_belonginfo(sd,g);
@@ -970,13 +991,12 @@ int guild_send_memberinfoshort(struct map_session_data *sd,int online)
 
 int guild_recv_memberinfoshort(int guild_id,int account_id,int char_id,int online,int lv,int class_)
 { // cleaned up [LuzZza]
-	
 	int i,alv,c,idx=-1,om=0,oldonline=-1;
 	struct guild *g = guild->search(guild_id);
-	
+
 	if(g == NULL)
 		return 0;
-	
+
 	for(i=0,alv=0,c=0,om=0;i<g->max_member;i++){
 		struct guild_member *m=&g->member[i];
 		if(!m->account_id) continue;
@@ -992,7 +1012,7 @@ int guild_recv_memberinfoshort(int guild_id,int account_id,int char_id,int onlin
 		if(m->online)
 			om++;
 	}
-	
+
 	if(idx == -1 || c == 0) {
 		//Treat char_id who doesn't match guild_id (not found as member)
 		struct map_session_data *sd = map->id2sd(account_id);
@@ -1000,10 +1020,10 @@ int guild_recv_memberinfoshort(int guild_id,int account_id,int char_id,int onlin
 			sd->status.guild_id=0;
 			sd->guild_emblem_id=0;
 		}
-		ShowWarning("guild: not found member %d,%d on %d[%s]\n", account_id,char_id,guild_id,g->name);
+		ShowWarning("guild: nao foram encontrado membros %d,%d em %d[%s]\n", account_id,char_id,guild_id,g->name);
 		return 0;
 	}
-	
+
 	g->average_lv=alv/c;
 	g->connect_member=om;
 
@@ -1012,14 +1032,14 @@ int guild_recv_memberinfoshort(int guild_id,int account_id,int char_id,int onlin
 
 	if(oldonline!=online)
 		clif->guild_memberlogin_notice(g, idx, online);
-	
+
 	if(!g->member[idx].sd)
 		return 0;
 
 	//Send XY dot updates. [Skotlex]
 	//Moved from guild_send_memberinfoshort [LuzZza]
 	for(i=0; i < g->max_member; i++) {
-		
+
 		if(!g->member[i].sd || i == idx ||
 			g->member[i].sd->bl.m != g->member[idx].sd->bl.m)
 			continue;
@@ -1078,7 +1098,7 @@ int guild_memberposition_changed(struct guild *g,int idx,int pos)
 
 	g->member[idx].position=pos;
 	clif->guild_memberpositionchanged(g,idx);
-	
+
 	// Update char position in client [LuzZza]
 	if(g->member[idx].sd != NULL)
 		clif->charnameupdate(g->member[idx].sd);
@@ -1110,7 +1130,7 @@ int guild_position_changed(int guild_id,int idx,struct guild_position *p)
 		return 0;
 	memcpy(&g->position[idx],p,sizeof(struct guild_position));
 	clif->guild_positionchanged(g,idx);
-	
+
 	// Update char name in client [LuzZza]
 	for(i=0;i<g->max_member;i++)
 		if(g->member[i].position == idx && g->member[i].sd != NULL)
@@ -1250,29 +1270,27 @@ unsigned int guild_payexp(struct map_session_data *sd,unsigned int exp) {
 	struct guild *g;
 	struct guild_expcache *c;
 	int per;
-	
+
 	nullpo_ret(sd);
 
 	if (!exp) return 0;
-	
+
 	if (sd->status.guild_id == 0 ||
 		(g = sd->guild) == NULL ||
 		(per = guild->getposition(g,sd)) < 0 ||
 		(per = g->position[per].exp_mode) < 1)
 		return 0;
-	
 
 	if (per < 100)
 		exp = exp * per / 100;
 	//Otherwise tax everything.
-	
 	c = DB->data2ptr(guild->expcache_db->ensure(guild->expcache_db, DB->i2key(sd->status.char_id), guild->create_expcache, sd));
 
 	if (c->exp > UINT64_MAX - exp)
 		c->exp = UINT64_MAX;
 	else
 		c->exp += exp;
-	
+
 	return exp;
 }
 
@@ -1328,9 +1346,9 @@ int guild_skillupack(int guild_id,uint16 skill_id,int account_id) {
 	struct map_session_data *sd=map->id2sd(account_id);
 	struct guild *g=guild->search(guild_id);
 	int i;
-	if(g==NULL)
+	if(!g)
 		return 0;
-	if( sd != NULL ) {
+	if(sd) {
 		clif->skillup(sd,skill_id,g->skill[skill_id-GD_SKILLBASE].lv, 0);
 
 		/* Guild Aura handling */
@@ -1360,7 +1378,7 @@ void guild_guildaura_refresh(struct map_session_data *sd, uint16 skill_id, uint1
 		return;
 	if( !skill_lv )
 		return;
-	if( sd->sc.data[type] && (group = skill->id2group(sd->sc.data[type]->val4)) ) {
+	if (sd->sc.data[type] && (group = skill->id2group(sd->sc.data[type]->val4)) != NULL) {
 		skill->del_unitgroup(group,ALC_MARK);
 		status_change_end(&sd->bl,type,INVALID_TIMER);
 	}
@@ -1428,10 +1446,9 @@ int guild_reqalliance(struct map_session_data *sd,struct map_session_data *tsd) 
 
 	if(map->agit_flag || map->agit2_flag) {
 		// Disable alliance creation during woe [Valaris]
-		clif->message(sd->fd,msg_sd(sd,876)); //"Alliances cannot be made during Guild Wars!"
+		clif->message(sd->fd,msg_txt(876)); //"Alliances cannot be made during Guild Wars!"
 		return 0;
 	}
-
 
 	nullpo_ret(sd);
 
@@ -1498,7 +1515,7 @@ int guild_reply_reqalliance(struct map_session_data *sd,int account_id,int flag)
 		struct guild *g, *tg; // Reconfirm the number of alliance
 		g=sd->guild;
 		tg=tsd->guild;
-		
+
 		if(g==NULL || guild->get_alliance_count(g,0) >= battle_config.max_guild_alliance){
 			clif->guild_allianceack(sd,4);
 			clif->guild_allianceack(tsd,3);
@@ -1544,7 +1561,7 @@ int guild_delalliance(struct map_session_data *sd,int guild_id,int flag) {
 
 	if(map->agit_flag || map->agit2_flag) {
 		// Disable alliance breaking during woe [Valaris]
-		clif->message(sd->fd,msg_sd(sd,877)); //"Alliances cannot be broken during Guild Wars!"
+		clif->message(sd->fd,msg_txt(877)); //"Alliances cannot be broken during Guild Wars!"
 		return 0;
 	}
 
@@ -1638,7 +1655,7 @@ int guild_allianceack(int guild_id1,int guild_id2,int account_id1,int account_id
 			channel->guild_leave_alliance(g[1],g[0]);
 		}
 	}
-	
+
 	if (!(flag & 0x08)) { // new relationship
 		for(i=0;i<2-(flag&1);i++) {
 			if(g[i]!=NULL) {
@@ -1669,7 +1686,6 @@ int guild_allianceack(int guild_id1,int guild_id2,int account_id1,int account_id
 		if( sd[0]!=NULL )
 			clif->guild_oppositionack(sd[0],0);
 	}
-
 
 	for (i = 0; i < 2 - (flag & 1); i++) { // Retransmission of the relationship list to all members
 		if (g[i] != NULL) {
@@ -1770,18 +1786,9 @@ int guild_broken(int guild_id,int flag)
 	}
 	if( g->instance )
 		aFree(g->instance);
-	
-	if( g->hdata )
-	{
-		for( i = 0; i < g->hdatac; i++ ) {
-			if( g->hdata[i]->flag.free ) {
-				aFree(g->hdata[i]->data);
-			}
-			aFree(g->hdata[i]);
-		}
-		aFree(g->hdata);
-	}
-	
+
+	HPM->data_store_destroy(&g->hdata);
+
 	idb_remove(guild->db,guild_id);
 	return 0;
 }
@@ -1794,7 +1801,7 @@ int guild_gm_change(int guild_id, struct map_session_data *sd)
 
 	if (sd->status.guild_id != guild_id)
 		return 0;
-	
+
 	g=guild->search(guild_id);
 
 	nullpo_ret(g);
@@ -1835,12 +1842,12 @@ int guild_gm_changed(int guild_id, int account_id, int char_id)
 	strcpy(g->master, g->member[0].name);
 
 	if (g->member[pos].sd && g->member[pos].sd->fd) {
-		clif->message(g->member[pos].sd->fd, msg_sd(g->member[pos].sd,878)); //"You no longer are the Guild Master."
+		clif->message(g->member[pos].sd->fd, msg_txt(878)); //"You no longer are the Guild Master."
 		g->member[pos].sd->state.gmaster_flag = 0;
 	}
-	
+
 	if (g->member[0].sd && g->member[0].sd->fd) {
-		clif->message(g->member[0].sd->fd, msg_sd(g->member[0].sd,879)); //"You have become the Guild Master!"
+		clif->message(g->member[0].sd->fd, msg_txt(879)); //"You have become the Guild Master!"
 		g->member[0].sd->state.gmaster_flag = 1;
 		//Block his skills for 5 minutes to prevent abuse.
 		guild->block_skill(g->member[0].sd, 300000);
@@ -1866,7 +1873,7 @@ int guild_break(struct map_session_data *sd,char *name) {
 	struct guild *g;
 	struct unit_data *ud;
 	int i;
-	
+
 	nullpo_ret(sd);
 
 	if( (g=sd->guild)==NULL )
@@ -1887,7 +1894,7 @@ int guild_break(struct map_session_data *sd,char *name) {
 		clif->guild_broken(sd,2);
 		return 0;
 	}
-	
+
 	/* regardless of char server allowing it, we clear the guild master's auras */
 	if( (ud = unit->bl2ud(&sd->bl)) ) {
 		int count = 0;
@@ -1899,12 +1906,11 @@ int guild_break(struct map_session_data *sd,char *name) {
 				case GD_SOULCOLD:
 				case GD_HAWKEYES:
 					if( count == 4 )
-						ShowWarning("guild_break:'%s' got more than 4 guild aura instances! (%d)\n",sd->status.name,ud->skillunit[i]->skill_id);
+						ShowWarning("guild_break:'%s' obteve mais de 4 guild aura instances! (%d)\n",sd->status.name,ud->skillunit[i]->skill_id);
 					else
 						groups[count++] = ud->skillunit[i];
 					break;
 			}
-			
 		}
 		for(i = 0; i < count; i++) { // FIXME: Why is this not done in the above loop?
 			skill->del_unitgroup(groups[i],ALC_MARK);
@@ -1914,7 +1920,7 @@ int guild_break(struct map_session_data *sd,char *name) {
 #ifdef GP_BOUND_ITEMS
 	pc->bound_clear(sd,IBT_GUILD);
 #endif
-	
+
 	intif->guild_break(g->guild_id);
 	return 1;
 }
@@ -1940,7 +1946,7 @@ void guild_castle_map_init(void)
 		}
 		dbi_destroy(iter);
 		if (intif->guild_castle_dataload(num, castle_ids))
-			ShowStatus("Requested '"CL_WHITE"%d"CL_RESET"' guild castles from char-server...\n", num);
+			ShowStatus("Requisitado '"CL_WHITE"%d"CL_RESET"' castelos de guild do char-server...\n", num);
 		aFree(castle_ids);
 	}
 }
@@ -1958,7 +1964,7 @@ int guild_castledatasave(int castle_id, int index, int value)
 	struct guild_castle *gc = guild->castle_search(castle_id);
 
 	if (gc == NULL) {
-		ShowWarning("guild_castledatasave: guild castle '%d' not found\n", castle_id);
+		ShowWarning("guild_castledatasave: castelo de guild '%d' nao encontrado\n", castle_id);
 		return 0;
 	}
 
@@ -2004,7 +2010,7 @@ int guild_castledatasave(int castle_id, int index, int value)
 			gc->guardian[index-10].visible = value;
 			break;
 		}
-		ShowWarning("guild_castledatasave: index = '%d' is out of allowed range\n", index);
+		ShowWarning("guild_castledatasave: index = '%d' esta fora do intervalo permitido\n", index);
 		return 0;
 	}
 
@@ -2062,7 +2068,7 @@ int guild_castledataloadack(int len, struct guild_castle *gc)
 		for( i = 0; i < n; i++, gc++ ) {
 			struct guild_castle *c = guild->castle_search(gc->castle_id);
 			if (!c) {
-				ShowError("guild_castledataloadack: castle id=%d not found.\n", gc->castle_id);
+				ShowError("guild_castledataloadack: id do castelo=%d nao encontrado.\n", gc->castle_id);
 				continue;
 			}
 
@@ -2079,7 +2085,7 @@ int guild_castledataloadack(int len, struct guild_castle *gc)
 			}
 		}
 	}
-	ShowStatus("Received '"CL_WHITE"%d"CL_RESET"' guild castles from char-server.\n", n);
+	ShowStatus("Recebido '"CL_WHITE"%d"CL_RESET"' castelos de guild do char-server.\n", n);
 	return 0;
 }
 
@@ -2090,7 +2096,7 @@ void guild_agit_start(void)
 {
 	// Run All NPC_Event[OnAgitStart]
 	int c = npc->event_doall("OnAgitStart");
-	ShowStatus("NPC_Event:[OnAgitStart] Run (%d) Events by @AgitStart.\n",c);
+	ShowStatus("NPC_Event:[OnAgitStart] Executado (%d) Eventos de @AgitStart.\n",c);
 }
 
 /*====================================================
@@ -2100,7 +2106,7 @@ void guild_agit_end(void)
 {
 	// Run All NPC_Event[OnAgitEnd]
 	int c = npc->event_doall("OnAgitEnd");
-	ShowStatus("NPC_Event:[OnAgitEnd] Run (%d) Events by @AgitEnd.\n",c);
+	ShowStatus("NPC_Event:[OnAgitEnd] Executado (%d) Eventos de @AgitEnd.\n",c);
 }
 
 /*====================================================
@@ -2110,7 +2116,7 @@ void guild_agit2_start(void)
 {
 	// Run All NPC_Event[OnAgitStart2]
 	int c = npc->event_doall("OnAgitStart2");
-	ShowStatus("NPC_Event:[OnAgitStart2] Run (%d) Events by @AgitStart2.\n",c);
+	ShowStatus("NPC_Event:[OnAgitStart2] Executado (%d) Eventos de @AgitStart2.\n",c);
 }
 
 /*====================================================
@@ -2120,7 +2126,7 @@ void guild_agit2_end(void)
 {
 	// Run All NPC_Event[OnAgitEnd2]
 	int c = npc->event_doall("OnAgitEnd2");
-	ShowStatus("NPC_Event:[OnAgitEnd2] Run (%d) Events by @AgitEnd2.\n",c);
+	ShowStatus("NPC_Event:[OnAgitEnd2] Executados (%d) Eventos de @AgitEnd2.\n",c);
 }
 
 // How many castles does this guild have?
@@ -2152,7 +2158,7 @@ bool guild_isallied(int guild_id, int guild_id2)
 
 void guild_flag_add(struct npc_data *nd) {
 	int i;
-	
+
 	/* check */
 	for( i = 0; i < guild->flags_count; i++ ) {
 		if( guild->flags[i] && guild->flags[i]->bl.id == nd->bl.id ) {
@@ -2183,11 +2189,10 @@ void guild_flag_remove(struct npc_data *nd) {
 	for( i = 0, cursor = 0; i < guild->flags_count; i++ ) {
 		if( guild->flags[i] == NULL )
 			continue;
-		
+
 		if( cursor != i ) {
 			memmove(&guild->flags[cursor], &guild->flags[i], sizeof(struct npc_data*));
 		}
-		
 		cursor++;
 	}
 
@@ -2233,7 +2238,7 @@ void guild_flags_clear(void) {
 		if( guild->flags[i] )
 			guild->flags[i] = NULL;
 	}
-	
+
 	guild->flags_count = 0;
 }
 
@@ -2246,10 +2251,10 @@ void do_init_guild(bool minimal) {
 	guild->expcache_db  = idb_alloc(DB_OPT_BASE);
 	guild->infoevent_db = idb_alloc(DB_OPT_BASE);
 	guild->expcache_ers = ers_new(sizeof(struct guild_expcache),"guild.c::expcache_ers",ERS_OPT_NONE);
-		
-	sv->readdb(map->db_path, "castle_db.txt", ',', 4, 5, -1, guild->read_castledb);
 
-	sv->readdb(map->db_path, "guild_skill_tree.txt", ',', 2+MAX_GUILD_SKILL_REQUIRE*2, 2+MAX_GUILD_SKILL_REQUIRE*2, -1, guild->read_guildskill_tree_db); //guild skill tree [Komurka]
+	sv->readdb(map->db_path, "Guild_DB/Castles.txt", ',', 4, 5, -1, guild->read_castledb); // [ New DB ]
+	//guild skill tree [Komurka]
+	sv->readdb(map->db_path, "Guild_DB/Guild_Skill_Tree.txt", ',', 2+MAX_GUILD_SKILL_REQUIRE*2, 2+MAX_GUILD_SKILL_REQUIRE*2, -1, guild->read_guildskill_tree_db); // [ New DB ]
 
 	timer->add_func_list(guild->payexp_timer,"guild_payexp_timer");
 	timer->add_func_list(guild->send_xy_timer, "guild_send_xy_timer");
@@ -2260,8 +2265,7 @@ void do_init_guild(bool minimal) {
 void do_final_guild(void) {
 	DBIterator *iter = db_iterator(guild->db);
 	struct guild *g;
-	int i;
-	
+
 	for( g = dbi_first(iter); dbi_exists(iter); g = dbi_next(iter) ) {
 		if( g->channel != NULL )
 			channel->delete(g->channel);
@@ -2269,32 +2273,23 @@ void do_final_guild(void) {
 			aFree(g->instance);
 			g->instance = NULL;
 		}
-		if( g->hdata )
-		{
-			for( i = 0; i < g->hdatac; i++ ) {
-				if( g->hdata[i]->flag.free ) {
-					aFree(g->hdata[i]->data);
-				}
-				aFree(g->hdata[i]);
-			}
-			aFree(g->hdata);
-		}
+		HPM->data_store_destroy(&g->hdata);
 	}
-	
+
 	dbi_destroy(iter);
-	
+
 	db_destroy(guild->db);
 	guild->castle_db->destroy(guild->castle_db,guild->castle_db_final);
 	guild->expcache_db->destroy(guild->expcache_db,guild->expcache_db_final);
 	guild->infoevent_db->destroy(guild->infoevent_db,guild->eventlist_db_final);
 	ers_destroy(guild->expcache_ers);
-		
+
 	if( guild->flags )
 		aFree(guild->flags);
 }
 void guild_defaults(void) {
 	guild = &guild_s;
-	
+
 	guild->init = do_init_guild;
 	guild->final = do_final_guild;
 	/* */

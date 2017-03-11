@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_CONSOLE_H
 #define COMMON_CONSOLE_H
 
-#include "config/core.h" // MAX_CONSOLE_INPUT
-
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
+#include "common/db.h"
 #include "common/mutex.h"
 #include "common/spinlock.h"
 #include "common/sql.h"
@@ -35,13 +59,20 @@ typedef void (*CParseFunc)(char *line);
 #define CPCMD_C_A(x,y) console_parse_ ##y ##x
 
 #define CP_CMD_LENGTH 20
+
+enum CONSOLE_PARSE_ENTRY_TYPE {
+	CPET_UNKNOWN,
+	CPET_FUNCTION,
+	CPET_CATEGORY,
+};
+
 struct CParseEntry {
 	char cmd[CP_CMD_LENGTH];
+	int type; ///< Entry type (@see enum CONSOLE_PARSE_ENTRY_TYPE)
 	union {
 		CParseFunc func;
-		struct CParseEntry **next;
+		VECTOR_DECL(struct CParseEntry *) children;
 	} u;
-	unsigned short next_count;
 };
 
 #ifdef CONSOLE_INPUT
@@ -53,10 +84,8 @@ struct console_input_interface {
 	ramutex *ptmutex;/* parse thread mutex */
 	racond *ptcond;/* parse thread cond */
 	/* */
-	struct CParseEntry **cmd_list;
-	struct CParseEntry **cmds;
-	unsigned int cmd_count;
-	unsigned int cmd_list_count;
+	VECTOR_DECL(struct CParseEntry *) command_list;
+	VECTOR_DECL(struct CParseEntry *) commands;
 	/* */
 	Sql *SQL;
 	/* */
@@ -84,10 +113,10 @@ struct console_interface {
 	struct console_input_interface *input;
 };
 
-struct console_interface *console;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void console_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct console_interface *console;
 
 #endif /* COMMON_CONSOLE_H */

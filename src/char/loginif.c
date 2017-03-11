@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "loginif.h"
 
@@ -20,6 +44,7 @@
 #include <string.h>
 
 struct loginif_interface loginif_s;
+struct loginif_interface *loginif;
 
 /// Resets all the data.
 void loginif_reset(void)
@@ -28,7 +53,7 @@ void loginif_reset(void)
 	// TODO kick everyone out and reset everything or wait for connect and try to reacquire locks [FlavioJS]
 	for( id = 0; id < ARRAYLENGTH(chr->server); ++id )
 		mapif->server_reset(id);
-	flush_fifos();
+	sockt->flush_fifos();
 	exit(EXIT_FAILURE);
 }
 
@@ -38,16 +63,16 @@ void loginif_reset(void)
 /// If all the conditions are met, it stops the core loop.
 void loginif_check_shutdown(void)
 {
-	if( runflag != CHARSERVER_ST_SHUTDOWN )
+	if( core->runflag != CHARSERVER_ST_SHUTDOWN )
 		return;
-	runflag = CORE_ST_STOP;
+	core->runflag = CORE_ST_STOP;
 }
 
 
 /// Called when the connection to Login Server is disconnected.
 void loginif_on_disconnect(void)
 {
-	ShowWarning("Connection to Login Server lost.\n\n");
+	ShowWarning("Conexao com o login-server perdida.\n\n");
 }
 
 
@@ -62,9 +87,9 @@ void loginif_on_ready(void)
 	chr->send_accounts_tologin(INVALID_TIMER, timer->gettick(), 0, 0);
 
 	// if no map-server already connected, display a message...
-	ARR_FIND( 0, ARRAYLENGTH(chr->server), i, chr->server[i].fd > 0 && chr->server[i].map );
-	if( i == ARRAYLENGTH(chr->server) )
-		ShowStatus("Awaiting maps from map-server.\n");
+	ARR_FIND(0, ARRAYLENGTH(chr->server), i, chr->server[i].fd > 0 && VECTOR_LENGTH(chr->server[i].maps));
+	if (i == ARRAYLENGTH(chr->server))
+		ShowStatus("Aguardando mapas do map-server.\n");
 }
 
 void do_init_loginif(void)
@@ -80,9 +105,8 @@ void do_init_loginif(void)
 
 void do_final_loginif(void)
 {
-	if( chr->login_fd != -1 )
-	{
-		do_close(chr->login_fd);
+	if (chr->login_fd != -1) {
+		sockt->close(chr->login_fd);
 		chr->login_fd = -1;
 	}
 }

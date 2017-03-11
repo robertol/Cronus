@@ -1,11 +1,35 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_CONF_H
 #define COMMON_CONF_H
 
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 
 #include <libconfig/libconfig.h>
 
@@ -16,8 +40,8 @@ struct libconfig_interface {
 	int (*read) (config_t *config, FILE *stream);
 	void (*write) (const config_t *config, FILE *stream);
 	/* */
-	void (*set_auto_convert) (config_t *config, int flag);
-	int (*get_auto_convert) (const config_t *config);
+	void (*set_auto_convert) (config_t *config, int flag); // TODO: Replace with config_set_options
+	int (*get_auto_convert) (const config_t *config); // TODO: Replace with config_get_options
 	/* */
 	int (*read_string) (config_t *config, const char *str);
 	int (*read_file_src) (config_t *config, const char *filename);
@@ -74,13 +98,13 @@ struct libconfig_interface {
 	int (*setting_remove_elem) (config_setting_t *parent, unsigned int idx);
 	void (*setting_set_hook) (config_setting_t *setting, void *hook);
 
-	config_setting_t * (*lookup) (const config_t *config, const char *path);
-	config_setting_t * (*lookup_from) (config_setting_t *setting, const char *path);
-	int (*lookup_int) (const config_t *config, const char *path, int *value);
-	int (*lookup_int64) (const config_t *config, const char *path, long long *value);
-	int (*lookup_float) (const config_t *config, const char *path, double *value);
-	int (*lookup_bool) (const config_t *config, const char *path, int *value);
-	int (*lookup_string) (const config_t *config, const char *path, const char **value);
+	config_setting_t * (*lookup) (const config_t *config, const char *filepath);
+	config_setting_t * (*lookup_from) (config_setting_t *setting, const char *filepath);
+	int (*lookup_int) (const config_t *config, const char *filepath, int *value);
+	int (*lookup_int64) (const config_t *config, const char *filepath, long long *value);
+	int (*lookup_float) (const config_t *config, const char *filepath, double *value);
+	int (*lookup_bool) (const config_t *config, const char *filepath, int *value);
+	int (*lookup_string) (const config_t *config, const char *filepath, const char **value);
 
 	/* those are custom and are from src/common/conf.c */
 	/* Functions to copy settings from libconfig/contrib */
@@ -91,10 +115,10 @@ struct libconfig_interface {
 	int (*setting_copy) (config_setting_t *parent, const config_setting_t *src);
 };
 
-struct libconfig_interface *libconfig;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void libconfig_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct libconfig_interface *libconfig;
 
 #endif // COMMON_CONF_H

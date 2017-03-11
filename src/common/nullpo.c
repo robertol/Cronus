@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "nullpo.h"
 
@@ -12,11 +36,12 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef __GNUC__
+#ifdef HAVE_EXECINFO
 #include <execinfo.h>
-#endif
+#endif // HAVE_EXECINFO
 
 struct nullpo_interface nullpo_s;
+struct nullpo_interface *nullpo;
 
 /**
  * Reports failed assertions or NULL pointers
@@ -28,28 +53,28 @@ struct nullpo_interface nullpo_s;
  * @param title      Message title to display (i.e. failed assertion or nullpo info)
  */
 void assert_report(const char *file, int line, const char *func, const char *targetname, const char *title) {
-#ifdef __GNUC__
+#ifdef HAVE_EXECINFO
 	void *array[10];
 	int size;
 	char **strings;
 	int i;
-#endif
+#endif // HAVE_EXECINFO
 	if (file == NULL)
 		file = "??";
 
 	if (func == NULL || *func == '\0')
-		func = "unknown";
+		func = "desconhecido";
 
 	ShowError("--- %s --------------------------------------------\n", title);
-	ShowError("%s:%d: '%s' in function `%s'\n", file, line, targetname, func);
-#ifdef __GNUC__
+	ShowError("%s:%d: '%s' na funcao `%s'\n", file, line, targetname, func);
+#ifdef HAVE_EXECINFO
 	size = (int)backtrace(array, 10);
 	strings = backtrace_symbols(array, size);
 	for (i = 0; i < size; i++)
 		ShowError("%s\n", strings[i]);
 	free(strings);
-#endif
-	ShowError("--- end %s ----------------------------------------\n", title);
+#endif // HAVE_EXECINFO
+	ShowError("--- fim %s ----------------------------------------\n", title);
 }
 
 /**
@@ -57,6 +82,5 @@ void assert_report(const char *file, int line, const char *func, const char *tar
  **/
 void nullpo_defaults(void) {
 	nullpo = &nullpo_s;
-	
 	nullpo->assert_report = assert_report;
 }

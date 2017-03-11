@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "elemental.h"
 
@@ -26,7 +50,7 @@
 #include "map/trade.h"
 #include "map/unit.h"
 #include "common/cbasetypes.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/random.h"
@@ -42,6 +66,7 @@
 #include <string.h>
 
 struct elemental_interface elemental_s;
+struct elemental_interface *elemental;
 
 int elemental_search_index(int class_) {
 	int i;
@@ -330,7 +355,7 @@ int elemental_clean_single_effect(struct elemental_data *ed, uint16 skill_id) {
 				if( bl ) status_change_end(bl,type,INVALID_TIMER);
 				break;
 			default:
-				ShowWarning("Invalid SC=%d in elemental_clean_single_effect\n",type);
+				ShowWarning("Invalido SC=%d em elemental_clean_single_effect\n",type);
 				break;
 		}
 	}
@@ -586,8 +611,8 @@ struct skill_condition elemental_skill_get_requirements(uint16 skill_id, uint16 
 	if( skill_lv < 1 || skill_lv > MAX_SKILL_LEVEL )
 		return req;
 
-	req.hp = skill->db[idx].hp[skill_lv-1];
-	req.sp = skill->db[idx].sp[skill_lv-1];
+	req.hp = skill->dbs->db[idx].hp[skill_lv-1];
+	req.sp = skill->dbs->db[idx].sp[skill_lv-1];
 
 	return req;
 }
@@ -783,14 +808,14 @@ int read_elementaldb(void) {
 	struct s_elemental_db *db;
 	struct status_data *estatus;
 
-	sprintf(line, "%s/%s", map->db_path, "elemental_db.txt");
-	
-	if( runflag == MAPSERVER_ST_RUNNING ) //only necessary after we're up
+	sprintf(line, "%s/%s", map->db_path, "Summon_DB/Elemental.txt");
+
+	if( core->runflag == MAPSERVER_ST_RUNNING ) //only necessary after we're up
 		memset(elemental->db,0,sizeof(elemental->db));
 
 	fp = fopen(line, "r");
 	if( !fp ) {
-		ShowError("read_elementaldb : can't read elemental_db.txt\n");
+		ShowError("read_elementaldb : nao foi possivel ler o elemental_db.txt\n");
 		return -1;
 	}
 
@@ -809,7 +834,7 @@ int read_elementaldb(void) {
 			p = strtok(NULL, ",");
 		}
 		if( i < 26 ) {
-			ShowError("read_elementaldb : Incorrect number of columns at elemental_db.txt line %d.\n", k);
+			ShowError("read_elementaldb : Numero de colunas incorretas no elemental_db.txt linha %d.\n", k);
 			continue;
 		}
 
@@ -844,11 +869,11 @@ int read_elementaldb(void) {
 		estatus->def_ele = ele%10;
 		estatus->ele_lv = ele/20;
 		if( estatus->def_ele >= ELE_MAX ) {
-			ShowWarning("Elemental %d has invalid element type %d (max element is %d)\n", db->class_, estatus->def_ele, ELE_MAX - 1);
+			ShowWarning("Elemental %d contem um tipo de elemento invalido %d (max: %d)\n", db->class_, estatus->def_ele, ELE_MAX - 1);
 			estatus->def_ele = ELE_NEUTRAL;
 		}
 		if( estatus->ele_lv < 1 || estatus->ele_lv > 4 ) {
-			ShowWarning("Elemental %d has invalid element level %d (max is 4)\n", db->class_, estatus->ele_lv);
+			ShowWarning("Elemental %d contem um nivel de elemento invalido %d (max: 4)\n", db->class_, estatus->ele_lv);
 			estatus->ele_lv = 1;
 		}
 
@@ -862,7 +887,7 @@ int read_elementaldb(void) {
 	}
 
 	fclose(fp);
-	ShowStatus("Done reading '"CL_WHITE"%d"CL_RESET"' elementals in '"CL_WHITE"db/elemental_db.txt"CL_RESET"'.\n",j);
+	ShowStatus("Realizada leitura de '"CL_WHITE"%d"CL_RESET"' elementais em '"CL_WHITE"db/elemental_db.txt"CL_RESET"'.\n",j);
 
 	return 0;
 }
@@ -876,10 +901,10 @@ int read_elemental_skilldb(void) {
 	uint16 skill_id, skill_lv;
 	int skillmode;
 
-	sprintf(line, "%s/%s", map->db_path, "elemental_skill_db.txt");
+	sprintf(line, "%s/%s", map->db_path, "Summon_DB/Elemental_Skill.txt"); // [ New DB ]
 	fp = fopen(line, "r");
 	if( !fp ) {
-		ShowError("read_elemental_skilldb : can't read elemental_skill_db.txt\n");
+		ShowError("read_elemental_skilldb : nao foi possivel ler o Elemental_Skill.txt\n");
 		return -1;
 	}
 
@@ -898,20 +923,20 @@ int read_elemental_skilldb(void) {
 			p = strtok(NULL, ",");
 		}
 		if( i < 4 ) {
-			ShowError("read_elemental_skilldb : Incorrect number of columns at elemental_skill_db.txt line %d.\n", k);
+			ShowError("read_elemental_skilldb : Numero incorreto de colunas no Elemental_Skill.txt linha %d.\n", k);
 			continue;
 		}
 
 		class_ = atoi(str[0]);
 		ARR_FIND(0, MAX_ELEMENTAL_CLASS, i, class_ == elemental->db[i].class_);
 		if( i == MAX_ELEMENTAL_CLASS ) {
-			ShowError("read_elemental_skilldb : Class not found in elemental_db for skill entry, line %d.\n", k);
+			ShowError("read_elemental_skilldb : Classe nao encontrada no elemental_db para entrada de habilidade, linha %d.\n", k);
 			continue;
 		}
 
 		skill_id = atoi(str[1]);
 		if( skill_id < EL_SKILLBASE || skill_id >= EL_SKILLBASE + MAX_ELEMENTALSKILL ) {
-			ShowError("read_elemental_skilldb : Skill out of range, line %d.\n", k);
+			ShowError("read_elemental_skilldb : Habilidade fora do alcance, linha %d.\n", k);
 			continue;
 		}
 
@@ -920,12 +945,12 @@ int read_elemental_skilldb(void) {
 
 		skillmode = atoi(str[3]);
 		if( skillmode < EL_SKILLMODE_PASIVE || skillmode > EL_SKILLMODE_AGGRESSIVE ) {
-			ShowError("read_elemental_skilldb : Skillmode out of range, line %d.\n",k);
+			ShowError("read_elemental_skilldb : Skillmode fora do alcance, linha %d.\n",k);
 			continue;
 		}
 		ARR_FIND( 0, MAX_ELESKILLTREE, i, db->skill[i].id == 0 || db->skill[i].id == skill_id );
 		if( i == MAX_ELESKILLTREE ) {
-			ShowWarning("Unable to load skill %d into Elemental %d's tree. Maximum number of skills per elemental has been reached.\n", skill_id, class_);
+			ShowWarning("Nao foi possivel carregar habilidade %d na arvore do Elemental %d's. O numero maximo de habilidade por elemental foi alcancado.\n", skill_id, class_);
 			continue;
 		}
 		db->skill[i].id = skill_id;
@@ -935,7 +960,7 @@ int read_elemental_skilldb(void) {
 	}
 
 	fclose(fp);
-	ShowStatus("Done reading '"CL_WHITE"%d"CL_RESET"' entries in '"CL_WHITE"db/elemental_skill_db.txt"CL_RESET"'.\n",j);
+	ShowStatus("Realizada leitura de '"CL_WHITE"%d"CL_RESET"' entradas em '"CL_WHITE"db/Elemental_Skill.txt"CL_RESET"'.\n",j); // [ New DB ]
 	return 0;
 }
 
@@ -979,27 +1004,26 @@ void elemental_defaults(void) {
 
 	/* */
 	memset(elemental->db,0,sizeof(elemental->db));
-	
+
 	/* funcs */
-	
 	elemental->class = elemental_class;
 	elemental->get_viewdata = elemental_get_viewdata;
-	
+
 	elemental->create = elemental_create;
 	elemental->data_received = elemental_data_received;
 	elemental->save = elemental_save;
-	
+
 	elemental->change_mode_ack = elemental_change_mode_ack;
 	elemental->change_mode = elemental_change_mode;
-	
+
 	elemental->heal = elemental_heal;
 	elemental->dead = elemental_dead;
-	
+
 	elemental->delete = elemental_delete;
 	elemental->summon_stop = elemental_summon_stop;
-	
+
 	elemental->get_lifetime = elemental_get_lifetime;
-	
+
 	elemental->unlocktarget = elemental_unlocktarget;
 	elemental->skillnotok = elemental_skillnotok;
 	elemental->set_target = elemental_set_target;
@@ -1007,11 +1031,11 @@ void elemental_defaults(void) {
 	elemental->clean_effect = elemental_clean_effect;
 	elemental->action = elemental_action;
 	elemental->skill_get_requirements = elemental_skill_get_requirements;
-	
+
 	elemental->read_skilldb = read_elemental_skilldb;
 	elemental->reload_db = reload_elementaldb;
 	elemental->reload_skilldb = reload_elemental_skilldb;
-	
+
 	elemental->search_index = elemental_search_index;
 	elemental->summon_init = elemental_summon_init;
 	elemental->summon_end_timer = elemental_summon_end_timer;

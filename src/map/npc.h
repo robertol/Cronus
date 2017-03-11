@@ -1,6 +1,30 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_NPC_H
 #define MAP_NPC_H
@@ -8,10 +32,10 @@
 #include "map/map.h" // struct block_list
 #include "map/status.h" // struct status_change
 #include "map/unit.h" // struct unit_data
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/db.h"
 
-struct HPluginData;
+struct hplugin_data_store;
 struct view_data;
 
 enum npc_parse_options {
@@ -33,7 +57,7 @@ struct npc_timerevent_list {
 	int timer,pos;
 };
 struct npc_label_list {
-	char name[NAME_LENGTH];
+	char name[NOME_NPC_LEN];
 	int pos;
 };
 struct npc_item_list {
@@ -55,8 +79,8 @@ struct npc_data {
 	struct npc_data *master_nd;
 	short class_;
 	short speed;
-	char name[NAME_LENGTH+1];// display name
-	char exname[NAME_LENGTH+1];// unique npc name
+	char name[NOME_NPC_LEN+1];// display name
+	char exname[NOME_NPC_LEN+1];// unique npc name
 	int chat_id;
 	int touching_id;
 	int64 next_walktime;
@@ -102,9 +126,7 @@ struct npc_data {
 			char killer_name[NAME_LENGTH];
 		} tomb;
 	} u;
-	/* HPData Support for npc_data */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 
@@ -137,6 +159,7 @@ enum npce_event {
 	NPCE_REATTACK, //OnPCReAttackEvent - [SlexFire]
 	NPCE_ATTACK, //OnPCAttackEvent - [SlexFire]
 	NPCE_TAKEITEM, //OnTakeItem - [SlexFire]
+	NPCE_USESKILL, //OnPCUseSkillEvent - [Redx]
 	NPCE_MAX
 };
 
@@ -282,12 +305,11 @@ struct npc_interface {
 	int (*secure_timeout_timer) (int tid, int64 tick, int id, intptr_t data);
 };
 
-struct npc_interface *npc;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void npc_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
 
+HPShared struct npc_interface *npc;
 
 /* comes from npc_chat.c */
 #ifdef PCRE_SUPPORT
@@ -327,9 +349,8 @@ struct npc_chat_interface {
 	void (*activate_pcreset) (struct npc_data* nd, int setid);
 	struct pcrematch_set* (*lookup_pcreset) (struct npc_data* nd, int setid);
 	void (*finalize_pcrematch_entry) (struct pcrematch_entry* e);
+	int (*mchat_sub) (struct block_list* bl, va_list ap); // mob_chat_sub [SlexFire]
 };
-
-struct npc_chat_interface *npc_chat;
 
 /**
  * pcre interface (libpcre)
@@ -347,14 +368,16 @@ struct pcre_interface {
 	int (*get_substring) (const char *subject, int *ovector, int stringcount, int stringnumber, const char **stringptr);
 };
 
-struct pcre_interface *libpcre;
-
 /**
  * Also defaults libpcre
  **/
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void npc_chat_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct npc_chat_interface *npc_chat;
+HPShared struct pcre_interface *libpcre;
+
 #endif // PCRE_SUPPORT
 
 #endif /* MAP_NPC_H */

@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "int_auction.h"
 
@@ -12,7 +36,7 @@
 #include "char/mapif.h"
 #include "common/cbasetypes.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -25,6 +49,7 @@
 #include <stdlib.h>
 
 struct inter_auction_interface inter_auction_s;
+struct inter_auction_interface *inter_auction;
 
 static int inter_auction_count(int char_id, bool buy)
 {
@@ -114,7 +139,7 @@ unsigned int inter_auction_create(struct auction_data *auction)
 
 		auction->auction_id = (unsigned int)SQL->StmtLastInsertId(stmt);
 		auction->auction_end_timer = timer->add( timer->gettick() + tick , inter_auction->end_timer, auction->auction_id, 0);
-		ShowInfo("New Auction %u | time left %"PRId64" ms | By %s.\n", auction->auction_id, tick, auction->seller_name);
+		ShowInfo("Novo leilao %u | tempo restante %"PRId64" ms | Por %s.\n", auction->auction_id, tick, auction->seller_name);
 
 		CREATE(auction_, struct auction_data, 1);
 		memcpy(auction_, auction, sizeof(struct auction_data));
@@ -143,14 +168,14 @@ static int inter_auction_end_timer(int tid, int64 tick, int id, intptr_t data) {
 	{
 		if( auction->buyer_id )
 		{
-			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Thanks, you won the auction!.", 0, &auction->item);
+			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Obrigado, voce ganhou o leilao!.", 0, &auction->item);
 			mapif->auction_message(auction->buyer_id, 6); // You have won the auction
-			inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Payment for your auction!.", auction->price, NULL);
+			inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Pagamento do seu leilao!.", auction->price, NULL);
 		}
 		else
-			inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "No buyers have been found for your auction.", 0, &auction->item);
+			inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Nenhum comprador foi encontrado para seu leilao.", 0, &auction->item);
 
-		ShowInfo("Auction End: id %u.\n", auction->auction_id);
+		ShowInfo("Fim fo leilao: id %u.\n", auction->auction_id);
 
 		auction->auction_end_timer = INVALID_TIMER;
 		inter_auction->delete_(auction);
@@ -357,7 +382,7 @@ void mapif_parse_auction_cancel(int fd)
 		return;
 	}
 
-	inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Auction canceled.", 0, &auction->item);
+	inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Leilao cancelado.", 0, &auction->item);
 	inter_auction->delete_(auction);
 
 	mapif->auction_cancel(fd, char_id, 0); // The auction has been canceled
@@ -396,9 +421,9 @@ void mapif_parse_auction_close(int fd)
 	}
 
 	// Send Money to Seller
-	inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Auction closed.", auction->price, NULL);
+	inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Leilao fechado.", auction->price, NULL);
 	// Send Item to Buyer
-	inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Auction winner.", 0, &auction->item);
+	inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Vencedor do leilao.", 0, &auction->item);
 	mapif->auction_message(auction->buyer_id, 6); // You have won the auction
 	inter_auction->delete_(auction);
 
@@ -437,11 +462,11 @@ void mapif_parse_auction_bid(int fd)
 	{ // Send Money back to the previous Buyer
 		if( auction->buyer_id != char_id )
 		{
-			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Someone has placed a higher bid.", auction->price, NULL);
+			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Alguem colocou um lance mais alto.", auction->price, NULL);
 			mapif->auction_message(auction->buyer_id, 7); // You have failed to win the auction
 		}
 		else
-			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "You have placed a higher bid.", auction->price, NULL);
+			inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Voce colocou um lance mais alto.", auction->price, NULL);
 	}
 
 	auction->buyer_id = char_id;
@@ -452,9 +477,9 @@ void mapif_parse_auction_bid(int fd)
 	{ // Automatic won the auction
 		mapif->auction_bid(fd, char_id, bid - auction->buynow, 1); // You have successfully bid in the auction
 
-		inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "You have won the auction.", 0, &auction->item);
+		inter_mail->sendmail(0, "Auction Manager", auction->buyer_id, auction->buyer_name, "Auction", "Voce ganhou o leilao.", 0, &auction->item);
 		mapif->auction_message(char_id, 6); // You have won the auction
-		inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Payment for your auction!.", auction->buynow, NULL);
+		inter_mail->sendmail(0, "Auction Manager", auction->seller_id, auction->seller_name, "Auction", "Pagamento do seu leilao!.", auction->buynow, NULL);
 
 		inter_auction->delete_(auction);
 		return;

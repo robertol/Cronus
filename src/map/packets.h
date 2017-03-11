@@ -1,5 +1,30 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 //Included directly by clif.h in packet_loaddb()
 
@@ -2818,7 +2843,6 @@ packet(0x96e,-1,clif->ackmergeitems);
 	packet(0x0A22,5);                           // HEADER_ZC_RECV_ROULETTE_ITEM
 #endif
 
-
 // 2014-10-22bRagexe - YomRawr
 #if PACKETVER >= 20141022
 	packet(0x0369,7,clif->pActionRequest,2,6);
@@ -2850,6 +2874,17 @@ packet(0x96e,-1,clif->ackmergeitems);
 	packet(0x091A,26,clif->pFriendsListAdd,2);
 	packet(0x0899,5,clif->pHomMenu,2,4);
 	packet(0x0438,36,clif->pStoragePassword,0);
+	packet(0x0A01,3,clif->pHotkeyRowShift,2);
+#endif
+
+#if PACKETVER >= 20150226
+	packet(0x0A09,45);
+	packet(0x0A0A,47);
+	packet(0x0A0B,47);
+	packet(0x0A0C,56);
+	packet(0x0A0D,-1);
+	packet(0x0A0F,-1);
+	packet(0x0A10,-1);
 #endif
 
 // 2015-05-13aRagexe
@@ -2875,17 +2910,21 @@ packet(0x96e,-1,clif->ackmergeitems);
 	packet(0x022D,2,clif->pReqCloseBuyingStore,0);
 	packet(0x0815,-1,clif->pReqOpenBuyingStore,2,4,8,9,89);
 	packet(0x0883,18,clif->pPartyBookingRegisterReq,2,4);
-	packet(0x02C4,8); // CZ_JOIN_BATTLE_FIELD
+	packet(0x02C4,8,clif->pDull); // CZ_JOIN_BATTLE_FIELD
 	packet(0x0960,-1,clif->pItemListWindowSelected,2,4,8);
 	packet(0x0363,19,clif->pWantToConnection,2,6,10,14,18);
 	packet(0x094A,26,clif->pPartyInvite2,2);
-	packet(0x0927,4); // CZ_GANGSI_RANK
+	packet(0x0927,4,clif->pDull); // CZ_GANGSI_RANK
 	packet(0x08A8,26,clif->pFriendsListAdd,2);
 	packet(0x0817,5,clif->pHomMenu,2,4);
 	packet(0x0923,36,clif->pStoragePassword,0);
-	packet(0x09e8,11,clif->pDull);	//CZ_OPEN_MAILBOX
-	packet(0x0a2e,6,clif->pDull);	//TITLE
-#endif         
+	packet(0x09E8,11,clif->pDull); // CZ_OPEN_MAILBOX
+	packet(0x0A2E,6,clif->pDull); // TITLE
+	packet(0x0A02,4); // ZC_DRESSROOM_OPEN
+	packet(0x0A35,4,clif->pOneClick_ItemIdentify,2);
+	packet(0x0a27,8); // ZC_RECOVERY2
+	packet(0x09f7,75); // ZC_PROPERTY_HOMUN_2
+#endif
 
 /* PacketKeys: http://herc.ws/board/topic/1105-hercules-wpe-free-june-14th-patch/ */
 #if PACKETVER >= 20110817

@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "utils.h"
 
@@ -29,6 +53,7 @@
 #include <sys/stat.h> // cache purposes [Ind/Hercules]
 
 struct HCache_interface HCache_s;
+struct HCache_interface *HCache;
 
 /// Dumps given buffer into file pointed to by a handle.
 void WriteDump(FILE* fp, const void* buffer, size_t length)
@@ -59,7 +84,6 @@ void WriteDump(FILE* fp, const void* buffer, size_t length)
 	}
 }
 
-
 /// Dumps given buffer on the console.
 void ShowDump(const void *buffer, size_t length) {
 	size_t i;
@@ -84,7 +108,6 @@ void ShowDump(const void *buffer, size_t length) {
 		ShowDebug("%03"PRIXS" %-48s  %-16s\n", i/16, hex, ascii);
 	}
 }
-
 
 #ifdef WIN32
 
@@ -136,7 +159,6 @@ void findfile(const char *p, const char *pat, void (func)(const char*))
 				func( tmppath );
 			}
 
-
 			if( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
 			{
 				findfile(tmppath, pat, func);
@@ -154,7 +176,7 @@ static char* checkpath(char *path, const char*srcpath)
 {
 	// just make sure the char*path is not const
 	char *p=path;
-	
+
 	if(NULL!=path && NULL!=srcpath) {
 		while(*srcpath) {
 			if (*srcpath=='\\') {
@@ -182,7 +204,7 @@ void findfile(const char *p, const char *pat, void (func)(const char*))
 	// open the directory for reading
 	dir = opendir( checkpath(path, path) );
 	if (!dir) {
-		ShowError("Cannot read directory '%s'\n", path);
+		ShowError("Nao e possivel ler o diretorio '%s'\n", path);
 		return;
 	}
 
@@ -203,7 +225,7 @@ void findfile(const char *p, const char *pat, void (func)(const char*))
 		}
 		// check if it is a directory.
 		if (stat(tmppath, &dir_stat) == -1) {
-			ShowError("stat error %s\n': ", tmppath);
+			ShowError("erro de estatistica %s\n': ", tmppath);
 			continue;
 		}
 		// is this a directory?
@@ -232,7 +254,7 @@ uint8 GetByte(uint32 val, int idx)
 	case 3: return (uint8)( (val & 0xFF000000) >> 0x18 );
 	default:
 #if defined(DEBUG)
-		ShowDebug("GetByte: invalid index (idx=%d)\n", idx);
+		ShowDebug("GetByte: Index invalido (idx=%d)\n", idx);
 #endif
 		return 0;
 	}
@@ -246,7 +268,7 @@ uint16 GetWord(uint32 val, int idx)
 	case 1: return (uint16)( (val & 0xFFFF0000) >> 0x10 );
 	default:
 #if defined(DEBUG)
-		ShowDebug("GetWord: invalid index (idx=%d)\n", idx);
+		ShowDebug("GetWord: Index invalido (idx=%d)\n", idx);
 #endif
 		return 0;
 	}
@@ -323,7 +345,7 @@ unsigned int get_percentage(const unsigned int A, const unsigned int B)
 
 	if( B == 0 )
 	{
-		ShowError("get_percentage(): division by zero! (A=%u,B=%u)\n", A, B);
+		ShowError("get_percentage(): Divisao por zero! (A=%u,B=%u)\n", A, B);
 		return ~0U;
 	}
 
@@ -331,7 +353,7 @@ unsigned int get_percentage(const unsigned int A, const unsigned int B)
 
 	if( result > UINT_MAX )
 	{
-		ShowError("get_percentage(): result percentage too high! (A=%u,B=%u,result=%g)\n", A, B, result);
+		ShowError("get_percentage(): Resultado de porcentagem muito alta! (A=%u,B=%u,result=%g)\n", A, B, result);
 		return UINT_MAX;
 	}
 
@@ -347,7 +369,6 @@ const char* timestamp2string(char* str, size_t size, time_t timestamp, const cha
 	memset(str + len, '\0', size - len);
 	return str;
 }
-
 
 /* [Ind/Hercules] Caching */
 bool HCache_check(const char *file)
@@ -433,7 +454,7 @@ void HCache_init(void)
 {
 	struct stat buf;
 	if (stat(SERVER_NAME, &buf) != 0) {
-		ShowWarning("Unable to open '%s', caching capabilities have been disabled!\n",SERVER_NAME);
+		ShowWarning("Nao e possivel abrir '%s', os recursos de cache foram desativados!\n",SERVER_NAME);
 		return;
 	}
 

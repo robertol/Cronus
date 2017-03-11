@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "mail.h"
 
@@ -19,6 +43,7 @@
 #include <string.h>
 
 struct mail_interface mail_s;
+struct mail_interface *mail;
 
 void mail_clear(struct map_session_data *sd)
 {
@@ -82,7 +107,7 @@ unsigned char mail_setitem(struct map_session_data *sd, int idx, int amount) {
 
 		if( idx < 0 || idx >= MAX_INVENTORY )
 			return 1;
-		if( amount < 0 || amount > sd->status.inventory[idx].amount )
+		if( amount <= 0 || amount > sd->status.inventory[idx].amount )
 			return 1;
 		if( !pc_can_give_items(sd) || sd->status.inventory[idx].expire_time ||
 			!itemdb_canmail(&sd->status.inventory[idx],pc_get_group_level(sd)) ||
@@ -121,6 +146,8 @@ bool mail_setattachment(struct map_session_data *sd, struct mail_message *msg)
 
 		memcpy(&msg->item, &sd->status.inventory[n], sizeof(struct item));
 		msg->item.amount = sd->mail.amount;
+		if (msg->item.amount != sd->mail.amount)  // check for amount overflow
+			return false;
 	}
 	else
 		memset(&msg->item, 0x00, sizeof(struct item));
@@ -182,7 +209,7 @@ void mail_deliveryfail(struct map_session_data *sd, struct mail_message *msg)
 // This function only check if the mail operations are valid
 bool mail_invalid_operation(struct map_session_data *sd) {
 	if( !map->list[sd->bl.m].flag.town && !pc->can_use_command(sd, "@mail") ) {
-		ShowWarning("clif->parse_Mail: char '%s' trying to do invalid mail operations.\n", sd->status.name);
+		ShowWarning("clif->parse_Mail: personagem '%s' tentando fazer operacoes de correio invalidas.\n", sd->status.name);
 		return true;
 	}
 
@@ -192,7 +219,7 @@ bool mail_invalid_operation(struct map_session_data *sd) {
 void mail_defaults(void)
 {
 	mail = &mail_s;
-	
+
 	mail->clear = mail_clear;
 	mail->removeitem = mail_removeitem;
 	mail->removezeny = mail_removezeny;

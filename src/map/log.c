@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "log.h"
 
@@ -23,6 +47,7 @@
 #include <string.h>
 
 struct log_interface log_s;
+struct log_interface *logs;
 
 /// obtain log type character for item/zeny logs
 char log_picktype2char(e_log_pick_type type) {
@@ -49,10 +74,9 @@ char log_picktype2char(e_log_pick_type type) {
 	}
 
 	// should not get here, fallback
-	ShowDebug("log_picktype2char: Unknown pick type %d.\n", type);
+	ShowDebug("log_picktype2char: Tipo de pick desconhecido %d.\n", type);
 	return 'X';
 }
-
 
 /// obtain log type character for chat logs
 char log_chattype2char(e_log_chat_type type) {
@@ -65,10 +89,9 @@ char log_chattype2char(e_log_chat_type type) {
 	}
 
 	// should not get here, fallback
-	ShowDebug("log_chattype2char: Unknown chat type %d.\n", type);
+	ShowDebug("log_chattype2char: Tipo de chat desconhecido %d.\n", type);
 	return 'O';
 }
-
 
 /// check if this item should be logged according the settings
 bool should_log_item(int nameid, int amount, int refine, struct item_data *id) {
@@ -111,7 +134,7 @@ void log_branch_sub_txt(struct map_session_data* sd) {
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_branch, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -144,7 +167,7 @@ void log_pick_sub_txt(int id, int16 m, e_log_pick_type type, int amount, struct 
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_pick, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -173,7 +196,6 @@ void log_pick_pc(struct map_session_data* sd, e_log_pick_type type, int amount, 
 	log_pick(sd->status.char_id, sd->bl.m, type, amount, itm, data ? data : itemdb->exists(itm->nameid));
 }
 
-
 /// logs item transactions (monsters)
 void log_pick_mob(struct mob_data* md, e_log_pick_type type, int amount, struct item* itm, struct item_data *data) {
 	nullpo_retv(md);
@@ -191,7 +213,7 @@ void log_zeny_sub_txt(struct map_session_data* sd, e_log_pick_type type, struct 
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_zeny, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -221,7 +243,7 @@ void log_mvpdrop_sub_txt(struct map_session_data* sd, int monster_id, int* log_m
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_mvpdrop,"a") ) == NULL )
 		return;
 	time(&curtime);
@@ -242,7 +264,7 @@ void log_mvpdrop(struct map_session_data* sd, int monster_id, int* log_mvp)
 
 void log_atcommand_sub_sql(struct map_session_data* sd, const char* message) {
 	SqlStmt* stmt;
-	
+
 	stmt = SQL->StmtMalloc(logs->mysql_handle);
 	if( SQL_SUCCESS != SQL->StmtPrepare(stmt, LOG_QUERY " INTO `%s` (`atcommand_date`, `account_id`, `char_id`, `char_name`, `map`, `command`) VALUES (NOW(), '%d', '%d', ?, '%s', ?)", logs->config.log_gm, sd->status.account_id, sd->status.char_id, mapindex_id2name(sd->mapindex) )
 	   ||  SQL_SUCCESS != SQL->StmtBindParam(stmt, 0, SQLDT_STRING, sd->status.name, strnlen(sd->status.name, NAME_LENGTH))
@@ -259,7 +281,7 @@ void log_atcommand_sub_txt(struct map_session_data* sd, const char* message) {
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_gm, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -297,7 +319,7 @@ void log_npc_sub_txt(struct map_session_data *sd, const char *message) {
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_npc, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -318,7 +340,7 @@ void log_npc(struct map_session_data* sd, const char* message)
 
 void log_chat_sub_sql(e_log_chat_type type, int type_id, int src_charid, int src_accid, const char *mapname, int x, int y, const char* dst_charname, const char* message) {
 	SqlStmt* stmt;
-	
+
 	stmt = SQL->StmtMalloc(logs->mysql_handle);
 	if( SQL_SUCCESS != SQL->StmtPrepare(stmt, LOG_QUERY " INTO `%s` (`time`, `type`, `type_id`, `src_charid`, `src_accountid`, `src_map`, `src_map_x`, `src_map_y`, `dst_charname`, `message`) VALUES (NOW(), '%c', '%d', '%d', '%d', '%s', '%d', '%d', ?, ?)", logs->config.log_chat, logs->chattype2char(type), type_id, src_charid, src_accid, mapname, x, y)
 	 || SQL_SUCCESS != SQL->StmtBindParam(stmt, 0, SQLDT_STRING, (char*)dst_charname, safestrnlen(dst_charname, NAME_LENGTH))
@@ -335,7 +357,7 @@ void log_chat_sub_txt(e_log_chat_type type, int type_id, int src_charid, int src
 	char timestring[255];
 	time_t curtime;
 	FILE* logfp;
-	
+
 	if( ( logfp = fopen(logs->config.log_chat, "a") ) == NULL )
 		return;
 	time(&curtime);
@@ -362,18 +384,18 @@ void log_chat(e_log_chat_type type, int type_id, int src_charid, int src_accid, 
 void log_sql_init(void) {
 	// log db connection
 	logs->mysql_handle = SQL->Malloc();
-	
-	ShowInfo(""CL_WHITE"[SQL]"CL_RESET": Connecting to the Log Database "CL_WHITE"%s"CL_RESET" At "CL_WHITE"%s"CL_RESET"...\n",logs->db_name,logs->db_ip);
+
+	ShowInfo(""CL_WHITE"[SQL]"CL_RESET": Conectando ao Banco de Dados: Log "CL_WHITE"%s"CL_RESET" na "CL_WHITE"%s"CL_RESET"...\n",logs->db_name,logs->db_ip);
 	if ( SQL_ERROR == SQL->Connect(logs->mysql_handle, logs->db_id, logs->db_pw, logs->db_ip, logs->db_port, logs->db_name) )
 		exit(EXIT_FAILURE);
-	ShowStatus(""CL_WHITE"[SQL]"CL_RESET": Successfully '"CL_GREEN"connected"CL_RESET"' to Database '"CL_WHITE"%s"CL_RESET"'.\n", logs->db_name);
-	
+	ShowStatus(""CL_WHITE"[SQL]"CL_RESET": Sucesso na '"CL_GREEN"conexao"CL_RESET"' ao Banco de Dados '"CL_WHITE"%s"CL_RESET"'.\n", logs->db_name);
+
 	if (map->default_codepage[0] != '\0')
 		if ( SQL_ERROR == SQL->SetEncoding(logs->mysql_handle, map->default_codepage) )
 			Sql_ShowDebug(logs->mysql_handle);
 }
 void log_sql_final(void) {
-	ShowStatus("Close Log DB Connection....\n");
+	ShowStatus("Fechando conexao ao Log DB....\n");
 	SQL->Free(logs->mysql_handle);
 	logs->mysql_handle = NULL;
 }
@@ -388,7 +410,6 @@ void log_set_defaults(void) {
 	logs->config.amount_items_log = 100;
 }
 
-
 int log_config_read(const char* cfgName) {
 	static int count = 0;
 	char line[1024], w1[1024], w2[1024];
@@ -398,7 +419,7 @@ int log_config_read(const char* cfgName) {
 		log_set_defaults();
 
 	if( ( fp = fopen(cfgName, "r") ) == NULL ) {
-		ShowError("Log configuration file not found at: %s\n", cfgName);
+		ShowError("Aquivo de configuracao do Log nao encontrado em: %s\n", cfgName);
 		return 1;
 	}
 
@@ -457,35 +478,35 @@ int log_config_read(const char* cfgName) {
 			else if (HPM->parseConf(w1, w2, HPCT_LOG))
 				; // handled by plugins
 			else
-				ShowWarning("Unknown setting '%s' in file %s\n", w1, cfgName);
+				ShowWarning("Configuracao desconhecida '%s' no arquivo %s\n", w1, cfgName);
 		}
 	}
 
 	fclose(fp);
 
 	if( --count == 0 ) {// report final logging state
-		const char* target = logs->config.sql_logs ? "table" : "file";
+		const char* target = logs->config.sql_logs ? "na tabela" : "no arquivo";
 
 		if( logs->config.enable_logs && logs->config.filter ) {
-			ShowInfo("Logging item transactions to %s '%s'.\n", target, logs->config.log_pick);
+			ShowInfo("Registrando transacoes de itens %s '%s'.\n", target, logs->config.log_pick);
 		}
 		if( logs->config.branch ) {
-			ShowInfo("Logging monster summon item usage to %s '%s'.\n", target, logs->config.log_pick);
+			ShowInfo("Registrando item de invocacao de monstro usado %s '%s'.\n", target, logs->config.log_pick);
 		}
 		if( logs->config.chat ) {
-			ShowInfo("Logging chat to %s '%s'.\n", target, logs->config.log_chat);
+			ShowInfo("Registrando chat %s '%s'.\n", target, logs->config.log_chat);
 		}
 		if( logs->config.commands ) {
-			ShowInfo("Logging commands to %s '%s'.\n", target, logs->config.log_gm);
+			ShowInfo("Registrando comandos %s '%s'.\n", target, logs->config.log_gm);
 		}
 		if( logs->config.mvpdrop ) {
-			ShowInfo("Logging MVP monster rewards to %s '%s'.\n", target, logs->config.log_mvpdrop);
+			ShowInfo("Registrando recompensa de MVP %s '%s'.\n", target, logs->config.log_mvpdrop);
 		}
 		if( logs->config.npc ) {
-			ShowInfo("Logging 'logmes' messages to %s '%s'.\n", target, logs->config.log_npc);
+			ShowInfo("Registrando 'logmes' mensagens %s '%s'.\n", target, logs->config.log_npc);
 		}
 		if( logs->config.zeny ) {
-			ShowInfo("Logging Zeny transactions to %s '%s'.\n", target, logs->config.log_zeny);
+			ShowInfo("Registrando transacoes de Zeny %s '%s'.\n", target, logs->config.log_zeny);
 		}
 		logs->config_done();
 	}
@@ -505,7 +526,7 @@ void log_config_complete(void) {
 }
 void log_defaults(void) {
 	logs = &log_s;
-	
+
 	sprintf(logs->db_ip,"127.0.0.1");
 	sprintf(logs->db_id,"ragnarok");
 	sprintf(logs->db_pw,"ragnarok");
@@ -514,7 +535,7 @@ void log_defaults(void) {
 	logs->db_port = 3306;
 	logs->mysql_handle = NULL;
 	/* */
-	
+
 	logs->pick_pc = log_pick_pc;
 	logs->pick_mob = log_pick_mob;
 	logs->zeny = log_zeny;
@@ -523,7 +544,7 @@ void log_defaults(void) {
 	logs->atcommand = log_atcommand;
 	logs->branch = log_branch;
 	logs->mvpdrop = log_mvpdrop;
-	
+
 	/* will be modified in a few seconds once loading is complete. */
 	logs->pick_sub = log_pick_sub_txt;
 	logs->zeny_sub = log_zeny_sub_txt;

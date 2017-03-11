@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "mercenary.h"
 
@@ -26,7 +50,7 @@
 #include "map/trade.h"
 #include "map/unit.h"
 #include "common/cbasetypes.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/random.h"
@@ -42,6 +66,9 @@
 #include <string.h>
 
 struct mercenary_interface mercenary_s;
+struct s_mercenary_db mercdb[MAX_MERCENARY_CLASS];
+
+struct mercenary_interface *mercenary;
 
 int merc_search_index(int class_)
 {
@@ -431,11 +458,11 @@ bool read_mercenarydb_sub(char* str[], int columns, int current) {
 	mstatus->def_ele = ele%10;
 	mstatus->ele_lv = ele/20;
 	if( mstatus->def_ele >= ELE_MAX ) {
-		ShowWarning("Mercenary %d has invalid element type %d (max element is %d)\n", db->class_, mstatus->def_ele, ELE_MAX - 1);
+		ShowWarning("Mercenario %d tem um tipo de elemento invalido %d (max: %d)\n", db->class_, mstatus->def_ele, ELE_MAX - 1);
 		mstatus->def_ele = ELE_NEUTRAL;
 	}
 	if( mstatus->ele_lv < 1 || mstatus->ele_lv > 4 ) {
-		ShowWarning("Mercenary %d has invalid element level %d (max is 4)\n", db->class_, mstatus->ele_lv);
+		ShowWarning("Mercenario %d tem um nivel de elemento invalido %d (max: 4)\n", db->class_, mstatus->ele_lv);
 		mstatus->ele_lv = 1;
 	}
 
@@ -449,8 +476,8 @@ bool read_mercenarydb_sub(char* str[], int columns, int current) {
 }
 
 int read_mercenarydb(void) {
-	memset(mercenary->db,0,sizeof(mercenary->db));
-	sv->readdb(map->db_path, "mercenary_db.txt", ',', 26, 26, MAX_MERCENARY_CLASS, mercenary->read_db_sub);
+	memset(mercenary->db, 0, sizeof(struct s_mercenary_db) * MAX_MERCENARY_CLASS);
+	sv->readdb(map->db_path, "Summon_DB/Mercenary.txt", ',', 26, 26, MAX_MERCENARY_CLASS, mercenary->read_db_sub); // [ New DB ]
 
 	return 0;
 }
@@ -465,14 +492,14 @@ bool read_mercenary_skilldb_sub(char* str[], int columns, int current)
 	ARR_FIND(0, MAX_MERCENARY_CLASS, i, class_ == mercenary->db[i].class_);
 	if( i == MAX_MERCENARY_CLASS )
 	{
-		ShowError("read_mercenary_skilldb : Class %d not found in mercenary_db for skill entry.\n", class_);
+		ShowError("read_mercenary_skilldb : Class %d nao encontrada em mercenary_db para entrada de habilidade.\n", class_);
 		return false;
 	}
-	
+
 	skill_id = atoi(str[1]);
 	if( skill_id < MC_SKILLBASE || skill_id >= MC_SKILLBASE + MAX_MERCSKILL )
 	{
-		ShowError("read_mercenary_skilldb : Skill %d out of range.\n", skill_id);
+		ShowError("read_mercenary_skilldb : Habilidade %d fora do alcance.\n", skill_id);
 		return false;
 	}
 
@@ -487,7 +514,7 @@ bool read_mercenary_skilldb_sub(char* str[], int columns, int current)
 }
 
 int read_mercenary_skilldb(void) {
-	sv->readdb(map->db_path, "mercenary_skill_db.txt", ',', 3, 3, -1, mercenary->read_skill_db_sub);
+	sv->readdb(map->db_path, "Summon_DB/Mercenary_Skill.txt", ',', 3, 3, -1, mercenary->read_skill_db_sub); // [ New DB ]
 
 	return 0;
 }
@@ -498,7 +525,7 @@ void do_init_mercenary(bool minimal) {
 
 	mercenary->read_db();
 	mercenary->read_skilldb();
-	
+
 	timer->add_func_list(mercenary->contract_end_timer, "merc_contract_end_timer");
 }
 
@@ -511,25 +538,25 @@ void mercenary_defaults(void) {
 	mercenary = &mercenary_s;
 
 	/* vars */
-	memset(mercenary->db,0,sizeof(mercenary->db));
+	mercenary->db = mercdb;
+	memset(mercenary->db, 0, sizeof(struct s_mercenary_db) * MAX_MERCENARY_CLASS);
 
 	/* funcs */
-	
 	mercenary->init = do_init_mercenary;
-	
+
 	mercenary->class = merc_class;
 	mercenary->get_viewdata = merc_get_viewdata;
-	
+
 	mercenary->create = merc_create;
 	mercenary->data_received = merc_data_received;
 	mercenary->save = mercenary_save;
-	
+
 	mercenary->heal = mercenary_heal;
 	mercenary->dead = mercenary_dead;
-	
+
 	mercenary->delete = merc_delete;
 	mercenary->contract_stop = merc_contract_stop;
-	
+
 	mercenary->get_lifetime = mercenary_get_lifetime;
 	mercenary->get_guild = mercenary_get_guild;
 	mercenary->get_faith = mercenary_get_faith;
@@ -537,14 +564,14 @@ void mercenary_defaults(void) {
 	mercenary->get_calls = mercenary_get_calls;
 	mercenary->set_calls = mercenary_set_calls;
 	mercenary->kills = mercenary_kills;
-	
+
 	mercenary->checkskill = mercenary_checkskill;
 	mercenary->read_db = read_mercenarydb;
 	mercenary->read_skilldb = read_mercenary_skilldb;
-	
+
 	mercenary->killbonus = mercenary_killbonus;
 	mercenary->search_index = merc_search_index;
-	
+
 	mercenary->contract_end_timer = merc_contract_end_timer;
 	mercenary->read_db_sub = read_mercenarydb_sub;
 	mercenary->read_skill_db_sub = read_mercenary_skilldb_sub;

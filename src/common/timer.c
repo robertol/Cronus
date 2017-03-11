@@ -1,14 +1,38 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "timer.h"
 
 #include "common/cbasetypes.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/showmsg.h"
 #include "common/utils.h"
 
@@ -24,6 +48,7 @@
 #include <string.h>
 
 struct timer_interface timer_s;
+struct timer_interface *timer;
 
 // If the server can't handle processing thousands of monsters
 // or many connected clients, please increase TIMER_MIN_INTERVAL.
@@ -74,9 +99,9 @@ int timer_add_func_list(TimerFunc func, char* name) {
 		for( tfl=tfl_root; tfl != NULL; tfl=tfl->next )
 		{// check suspicious cases
 			if( func == tfl->func )
-				ShowWarning("timer_add_func_list: duplicating function %p(%s) as %s.\n",tfl->func,tfl->name,name);
+				ShowWarning("timer_add_func_list: funcao duplicada %p(%s) as %s.\n",tfl->func,tfl->name,name);
 			else if( strcmp(name,tfl->name) == 0 )
-				ShowWarning("timer_add_func_list: function %p has the same name as %p(%s)\n",func,tfl->func,tfl->name);
+				ShowWarning("timer_add_func_list: A funcao %p tem o mesmo nome que %p(%s)\n",func,tfl->func,tfl->name);
 		}
 		CREATE(tfl,struct timer_func_list,1);
 		tfl->next = tfl_root;
@@ -121,7 +146,7 @@ static void rdtsc_calibrate(void){
 	uint64 t1, t2;
 	int32 i;
 
-	ShowStatus("Calibrating Timer Source, please wait... ");
+	ShowStatus("Calibrando o temporizador da source, por favor aguarde... ");
 
 	RDTSC_CLOCK = 0;
 
@@ -135,7 +160,7 @@ static void rdtsc_calibrate(void){
 
 	RDTSC_BEGINTICK = rdtsc_();
 
-	ShowMessage(" done. (Frequency: %u Mhz)\n", (uint32)(RDTSC_CLOCK/1000) );
+	ShowMessage(" Concluido. (Frequencia: %u Mhz)\n", (uint32)(RDTSC_CLOCK/1000) );
 }
 
 #endif
@@ -238,6 +263,10 @@ int64 timer_gettick(void) {
 /// Adds a timer to the timer_heap
 static void push_timer_heap(int tid) {
 	BHEAP_ENSURE(timer_heap, 1, 256);
+#ifdef __clang_analyzer__ // Clang's static analyzer warns that BHEAP_ENSURE might set BHEAP_DATA(timer_heap) to NULL.
+#include "assert.h"
+	assert(BHEAP_DATA(timer_heap) != NULL);
+#endif // __clang_analyzer__
 	BHEAP_PUSH(timer_heap, tid, DIFFTICK_MINTOPCMP, swap);
 }
 
@@ -300,7 +329,7 @@ int timer_add_interval(int64 tick, TimerFunc func, int id, intptr_t data, int in
 	int tid;
 
 	if (interval < 1) {
-		ShowError("timer_add_interval: invalid interval (tick=%"PRId64" %p[%s] id=%d data=%"PRIdPTR" diff_tick=%"PRId64")\n",
+		ShowError("timer_add_interval: Intervalo invalido (tick=%"PRId64" %p[%s] id=%d data=%"PRIdPTR" diff_tick=%"PRId64")\n",
 		          tick, func, search_timer_func_list(func), id, data, DIFF_TICK(tick, timer->gettick()));
 		return INVALID_TIMER;
 	}
@@ -327,11 +356,11 @@ const struct TimerData* timer_get(int tid) {
 /// Returns 0 on success, < 0 on failure.
 int timer_do_delete(int tid, TimerFunc func) {
 	if( tid < 0 || tid >= timer_data_num ) {
-		ShowError("timer_do_delete error : no such timer %d (%p(%s))\n", tid, func, search_timer_func_list(func));
+		ShowError("timer_do_delete error : nenhum temporizador %d (%p(%s))\n", tid, func, search_timer_func_list(func));
 		return -1;
 	}
 	if( timer_data[tid].func != func ) {
-		ShowError("timer_do_delete error : function mismatch %p(%s) != %p(%s)\n", timer_data[tid].func, search_timer_func_list(timer_data[tid].func), func, search_timer_func_list(func));
+		ShowError("timer_do_delete error : incompatibilidade de funcao %p(%s) != %p(%s)\n", timer_data[tid].func, search_timer_func_list(timer_data[tid].func), func, search_timer_func_list(func));
 		return -2;
 	}
 
@@ -347,15 +376,22 @@ int64 timer_addtick(int tid, int64 tick) {
 	return timer->settick(tid, timer_data[tid].tick+tick);
 }
 
-/// Modifies a timer's expiration time (an alternative to deleting a timer and starting a new one).
-/// Returns the new tick value, or -1 if it fails.
-int64 timer_settick(int tid, int64 tick) {
-	size_t i;
+/**
+ * Modifies a timer's expiration time (an alternative to deleting a timer and starting a new one).
+ *
+ * @param tid  The timer ID.
+ * @param tick New expiration time.
+ * @return The new tick value.
+ * @retval -1 in case of failure.
+ */
+int64 timer_settick(int tid, int64 tick)
+{
+	int i;
 
 	// search timer position
 	ARR_FIND(0, BHEAP_LENGTH(timer_heap), i, BHEAP_DATA(timer_heap)[i] == tid);
-	if( i == BHEAP_LENGTH(timer_heap) ) {
-		ShowError("timer_settick: no such timer %d (%p(%s))\n", tid, timer_data[tid].func, search_timer_func_list(timer_data[tid].func));
+	if (i == BHEAP_LENGTH(timer_heap)) {
+		ShowError("timer_settick: nenhum temporizador %d (%p(%s))\n", tid, timer_data[tid].func, search_timer_func_list(timer_data[tid].func));
 		return -1;
 	}
 
@@ -372,13 +408,18 @@ int64 timer_settick(int tid, int64 tick) {
 	return tick;
 }
 
-/// Executes all expired timers.
-/// Returns the value of the smallest non-expired timer (or 1 second if there aren't any).
-int do_timer(int64 tick) {
+/**
+ * Executes all expired timers.
+ *
+ * @param tick The current tick.
+ * @return The value of the smallest non-expired timer (or 1 second if there aren't any).
+ */
+int do_timer(int64 tick)
+{
 	int64 diff = TIMER_MAX_INTERVAL; // return value
 
 	// process all timers one by one
-	while( BHEAP_LENGTH(timer_heap) ) {
+	while (BHEAP_LENGTH(timer_heap) > 0) {
 		int tid = BHEAP_PEEK(timer_heap);// top element in heap (smallest tick)
 
 		diff = DIFF_TICK(timer_data[tid].tick, tick);

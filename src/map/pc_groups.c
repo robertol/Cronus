@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "pc_groups.h"
 
@@ -13,7 +37,7 @@
 #include "common/cbasetypes.h"
 #include "common/conf.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
 #include "common/strlib.h" // strcmp
@@ -21,6 +45,7 @@
 static GroupSettings dummy_group; ///< dummy group used in dummy map sessions @see pc_get_dummy_sd()
 
 struct pc_groups_interface pcg_s;
+struct pc_groups_interface *pcg;
 
 /**
  * Returns dummy group.
@@ -50,7 +75,7 @@ static void read_config(void) {
 	config_setting_t *groups = NULL;
 	const char *config_filename = "conf/groups.conf"; // FIXME hardcoded name
 	int group_count = 0;
-	
+
 	if (libconfig->read_file(&pc_group_config, config_filename))
 		return;
 
@@ -69,7 +94,7 @@ static void read_config(void) {
 			config_setting_t *group = libconfig->setting_get_elem(groups, i);
 
 			if (!libconfig->setting_lookup_int(group, "id", &id)) {
-				ShowConfigWarning(group, "pc_groups:read_config: \"groups\" list member #%d has undefined id, removing...", i);
+				ShowConfigWarning(group, "pc_groups:read_config: \"grupos\" lista de membro #%d tem ID indefinido, removendo...", i);
 				libconfig->setting_remove_elem(groups, i);
 				--i;
 				--group_count;
@@ -77,7 +102,7 @@ static void read_config(void) {
 			}
 
 			if (pcg->exists(id)) {
-				ShowConfigWarning(group, "pc_groups:read_config: duplicate group id %d, removing...", i);
+				ShowConfigWarning(group, "pc_groups:read_config: ID de grupo duplicado %d, removendo...", i);
 				libconfig->setting_remove_elem(groups, i);
 				--i;
 				--group_count;
@@ -93,7 +118,7 @@ static void read_config(void) {
 				snprintf(temp, sizeof(temp), "Group %d", id);
 				if ((name = config_setting_add(group, "name", CONFIG_TYPE_STRING)) == NULL ||
 				    !config_setting_set_string(name, temp)) {
-					ShowError("pc_groups:read_config: failed to set missing group name, id=%d, skipping... (%s:%d)\n",
+					ShowError("pc_groups:read_config: Falha ao definir o nome do grupo em falta, id=%d, pulando... (%s:%d)\n",
 					          id, config_setting_source_file(group), config_setting_source_line(group));
 					--i;
 					--group_count;
@@ -103,7 +128,7 @@ static void read_config(void) {
 			}
 
 			if (name2group(groupname) != NULL) {
-				ShowConfigWarning(group, "pc_groups:read_config: duplicate group name %s, removing...", groupname);
+				ShowConfigWarning(group, "pc_groups:read_config: nome de grupo duplicado %s, removendo...", groupname);
 				libconfig->setting_remove_elem(groups, i);
 				--i;
 				--group_count;
@@ -124,11 +149,10 @@ static void read_config(void) {
 
 			strdb_put(pcg->name_db, groupname, group_settings);
 			idb_put(pcg->db, id, group_settings);
-			
 		}
 		group_count = libconfig->setting_length(groups); // Save number of groups
 		assert(group_count == db_size(pcg->db));
-		
+
 		// Check if all commands and permissions exist
 		iter = db_iterator(pcg->db);
 		for (group_settings = dbi_first(iter); dbi_exists(iter); group_settings = dbi_next(iter)) {
@@ -144,7 +168,7 @@ static void read_config(void) {
 				config_setting_t *command = libconfig->setting_get_elem(commands, i);
 				const char *name = config_setting_name(command);
 				if (!atcommand->exists(name)) {
-					ShowConfigWarning(command, "pc_groups:read_config: non-existent command name '%s', removing...", name);
+					ShowConfigWarning(command, "pc_groups:read_config: nome de comando inexistente '%s', removendo...", name);
 					libconfig->setting_remove(commands, name);
 					--i;
 					--count;
@@ -163,7 +187,7 @@ static void read_config(void) {
 
 				ARR_FIND(0, pcg->permission_count, j, strcmp(pcg->permissions[j].name, name) == 0);
 				if (j == pcg->permission_count) {
-					ShowConfigWarning(permission, "pc_groups:read_config: non-existent permission name '%s', removing...", name);
+					ShowConfigWarning(permission, "pc_groups:read_config: nome de permissao inexistente '%s', removendo...", name);
 					libconfig->setting_remove(permissions, name);
 					--i;
 					--count;
@@ -181,7 +205,7 @@ static void read_config(void) {
 				                 *commands = group_settings->commands,
 					             *permissions = group_settings->permissions;
 				int j, inherit_count = 0, done = 0;
-				
+
 				if (group_settings->inheritance_done) // group already processed
 					continue;
 
@@ -191,18 +215,18 @@ static void read_config(void) {
 					group_settings->inheritance_done = true;
 					continue;
 				}
-				
+
 				for (j = 0; j < inherit_count; ++j) {
 					GroupSettings *inherited_group = NULL;
 					const char *groupname = libconfig->setting_get_string_elem(inherit, j);
 
 					if (groupname == NULL) {
-						ShowConfigWarning(inherit, "pc_groups:read_config: \"inherit\" array member #%d is not a name, removing...", j);
+						ShowConfigWarning(inherit, "pc_groups:read_config: \"inherit\" membro da array #%d nao e um nome, removendo...", j);
 						libconfig->setting_remove_elem(inherit,j);
 						continue;
 					}
 					if ((inherited_group = name2group(groupname)) == NULL) {
-						ShowConfigWarning(inherit, "pc_groups:read_config: non-existent group name \"%s\", removing...", groupname);
+						ShowConfigWarning(inherit, "pc_groups:read_config: nome de grupo inexistente \"%s\", removendo...", groupname);
 						libconfig->setting_remove_elem(inherit,j);
 						continue;
 					}
@@ -224,7 +248,7 @@ static void read_config(void) {
 
 					++done; // copied commands and permissions from one of inherited groups
 				}
-				
+
 				if (done == inherit_count) { // copied commands from all of inherited groups
 					++i;
 					group_settings->inheritance_done = true; // we're done with this group
@@ -233,12 +257,12 @@ static void read_config(void) {
 			dbi_destroy(iter);
 
 			if (++loop > group_count) {
-				ShowWarning("pc_groups:read_config: Could not process inheritance rules, check your config '%s' for cycles...\n",
+				ShowWarning("pc_groups:read_config: Nao pode processar regras de herdanca, cheque sua configuracao '%s' periodicamente...\n",
 				            config_filename);
 				break;
 			}
 		} // while(i < group_count)
-		
+
 		// Pack permissions into GroupSettings.e_permissions for faster checking
 		iter = db_iterator(pcg->db);
 		for (group_settings = dbi_first(iter); dbi_exists(iter); group_settings = dbi_next(iter)) {
@@ -281,7 +305,7 @@ static void read_config(void) {
 		}
 	}
 
-	ShowStatus("Done reading '"CL_WHITE"%d"CL_RESET"' groups in '"CL_WHITE"%s"CL_RESET"'.\n", group_count, config_filename);
+	ShowStatus("Realizada leitura de '"CL_WHITE"%d"CL_RESET"' grupos em '"CL_WHITE"%s"CL_RESET"'.\n", group_count, config_filename);
 
 	// All data is loaded now, discard config
 	libconfig->destroy(&pc_group_config);
@@ -364,28 +388,28 @@ int pc_group_get_idx(GroupSettings *group)
 unsigned int pc_groups_add_permission(const char *name) {
 	uint64 key = 0x1;
 	unsigned char i;
-	
+
 	for(i = 0; i < pcg->permission_count; i++) {
 		if( strcmpi(name,pcg->permissions[i].name) == 0 ) {
-			ShowError("pc_groups_add_permission(%s): failed! duplicate permission name!\n",name);
+			ShowError("pc_groups_add_permission(%s): falhou! Nome de permissao duplicado!\n",name);
 			return 0;
 		}
 	}
-	
+
 	if( i != 0 )
 		key = (uint64)pcg->permissions[i - 1].permission << 1;
-	
+
 	if( key >= UINT_MAX ) {
-		ShowError("pc_groups_add_permission(%s): failed! not enough room, too many permissions!\n",name);
+		ShowError("pc_groups_add_permission(%s): falhou! sem sala suficiente, muitas permissoes!\n",name);
 		return 0;
 	}
-	
+
 	i = pcg->permission_count;
 	RECREATE(pcg->permissions, struct pc_groups_permission_table, ++pcg->permission_count);
-	
+
 	pcg->permissions[i].name = aStrdup(name);
 	pcg->permissions[i].permission = (unsigned int)key;
-	
+
 	return (unsigned int)key;
 }
 /**
@@ -426,23 +450,23 @@ void do_init_pc_groups(void) {
 		{ "disable_skill_usage", PC_PERM_DISABLE_SKILL_USAGE },
 	};
 	unsigned char i, len = ARRAYLENGTH(pc_g_defaults);
-	
+
 	for(i = 0; i < len; i++) {
 		unsigned int p;
 		if( ( p = pc_groups_add_permission(pc_g_defaults[i].name) ) != pc_g_defaults[i].permission )
-			ShowError("do_init_pc_groups: %s error : %d != %d\n",pc_g_defaults[i].name,p,pc_g_defaults[i].permission);
+			ShowError("do_init_pc_groups: %s erro : %d != %d\n",pc_g_defaults[i].name,p,pc_g_defaults[i].permission);
 	}
-	
+
 	/**
 	 * Handle plugin-provided permissions
 	 **/
 	for(i = 0; i < pcg->HPMpermissions_count; i++) {
 		*pcg->HPMpermissions[i].mask = pc_groups_add_permission(pcg->HPMpermissions[i].name);
 	}
-	
+
 	pcg->db = idb_alloc(DB_OPT_RELEASE_DATA);
 	pcg->name_db = stridb_alloc(DB_OPT_DUP_KEY, 0);
-	
+
 	read_config();
 }
 
@@ -467,7 +491,7 @@ void do_final_pc_groups(void)
 		pcg->db->destroy(pcg->db, group_db_clear_sub);
 	if (pcg->name_db != NULL)
 		db_destroy(pcg->name_db);
-	
+
 	if(pcg->permissions != NULL) {
 		unsigned char i;
 		for(i = 0; i < pcg->permission_count; i++)
@@ -489,12 +513,12 @@ void pc_groups_reload(void) {
 
 	pcg->final();
 	pcg->init();
-	
+
 	/* refresh online users permissions */
 	iter = mapit_getallusers();
 	for (sd = (TBL_PC*)mapit->first(iter); mapit->exists(iter); sd = (TBL_PC*)mapit->next(iter)) {
 		if (pc->set_group(sd, sd->group_id) != 0) {
-			ShowWarning("pc_groups_reload: %s (AID:%d) has unknown group id (%d)! kicking...\n",
+			ShowWarning("pc_groups_reload: %s (AID:%d) tem um ID de grupo desconhecido (%d)! chutando...\n",
 				sd->status.name, sd->status.account_id, pc_get_group_id(sd));
 			clif->GM_kick(NULL, sd);
 		}
@@ -507,7 +531,6 @@ void pc_groups_reload(void) {
  **/
 void pc_groups_defaults(void) {
 	pcg = &pcg_s;
-	
 	/* */
 	pcg->db = NULL;
 	pcg->name_db = NULL;

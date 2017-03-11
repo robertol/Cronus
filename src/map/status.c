@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // ANTI_MAYAP_CHEAT, DBPATH, DEFTYPE_MAX, DEFTYPE_MIN, DEVOTION_REFLECT_DAMAGE, RENEWAL, RENEWAL_ASPD, RENEWAL_EDP
 #include "status.h"
@@ -28,13 +52,14 @@
 #include "map/vending.h"
 #include "common/cbasetypes.h"
 #include "common/ers.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/nullpo.h"
 #include "common/random.h"
 #include "common/showmsg.h"
 #include "common/strlib.h"
 #include "common/timer.h"
 #include "common/utils.h"
+#include "common/conf.h"
 
 #include <math.h>
 #include <memory.h>
@@ -44,6 +69,9 @@
 #include <time.h>
 
 struct status_interface status_s;
+struct s_status_dbs statusdbs;
+
+struct status_interface *status;
 
 /**
 * Returns the status change associated with a skill.
@@ -53,10 +81,10 @@ struct status_interface status_s;
 sc_type status_skill2sc(int skill_id) {
 	int idx;
 	if( (idx = skill->get_index(skill_id)) == 0 ) {
-		ShowError("status_skill2sc: Unsupported skill id %d\n", skill_id);
+		ShowError("status_skill2sc: ID de Habilidade %d nao suportado\n", skill_id);
 		return SC_NONE;
 	}
-	return status->Skill2SCTable[idx];
+	return status->dbs->Skill2SCTable[idx];
 }
 
 /**
@@ -68,11 +96,11 @@ sc_type status_skill2sc(int skill_id) {
 int status_sc2skill(sc_type sc)
 {
 	if( sc < 0 || sc >= SC_MAX ) {
-		ShowError("status_sc2skill: Unsupported status change id %d\n", sc);
+		ShowError("status_sc2skill: ID de mudanca de status %d nao suportado\n", sc);
 		return 0;
 	}
 
-	return status->SkillChangeTable[sc];
+	return status->dbs->SkillChangeTable[sc];
 }
 
 /**
@@ -83,11 +111,11 @@ int status_sc2skill(sc_type sc)
 unsigned int status_sc2scb_flag(sc_type sc)
 {
 	if( sc < 0 || sc >= SC_MAX ) {
-		ShowError("status_sc2scb_flag: Unsupported status change id %d\n", sc);
+		ShowError("status_sc2scb_flag: ID de mudanca de status %d nao suportado\n", sc);
 		return SCB_NONE;
 	}
 
-	return status->ChangeFlagTable[sc];
+	return status->dbs->ChangeFlagTable[sc];
 }
 
 /**
@@ -98,53 +126,53 @@ unsigned int status_sc2scb_flag(sc_type sc)
 int status_type2relevant_bl_types(int type)
 {
 	if( type < 0 || type >= SI_MAX ) {
-		ShowError("status_type2relevant_bl_types: Unsupported type %d\n", type);
+		ShowError("status_type2relevant_bl_types: Tipo %d nao suportado\n", type);
 		return BL_NUL;
 	}
 
-	return status->RelevantBLTypes[type];
+	return status->dbs->RelevantBLTypes[type];
 }
 
 static void set_sc(uint16 skill_id, sc_type sc, int icon, unsigned int flag) {
 	uint16 idx;
 	if( (idx = skill->get_index(skill_id)) == 0 ) {
-		ShowError("set_sc: Unsupported skill id %d\n", skill_id);
+		ShowError("set_sc: ID de Habilidade %d nao suportado\n", skill_id);
 		return;
 	}
 	if( sc < 0 || sc >= SC_MAX ) {
-		ShowError("set_sc: Unsupported status change id %d\n", sc);
+		ShowError("set_sc: ID de mudanca de status %d nao suportado\n", sc);
 		return;
 	}
 
-	if( status->SkillChangeTable[sc] == 0 )
-		status->SkillChangeTable[sc] = skill_id;
-	if( status->IconChangeTable[sc] == SI_BLANK )
-		status->IconChangeTable[sc] = icon;
-	status->ChangeFlagTable[sc] |= flag;
+	if( status->dbs->SkillChangeTable[sc] == 0 )
+		status->dbs->SkillChangeTable[sc] = skill_id;
+	if( status->dbs->IconChangeTable[sc] == SI_BLANK )
+		status->dbs->IconChangeTable[sc] = icon;
+	status->dbs->ChangeFlagTable[sc] |= flag;
 
-	if( status->Skill2SCTable[idx] == SC_NONE )
-		status->Skill2SCTable[idx] = sc;
+	if( status->dbs->Skill2SCTable[idx] == SC_NONE )
+		status->dbs->Skill2SCTable[idx] = sc;
 }
 
 void initChangeTables(void) {
 #define add_sc(skill,sc) set_sc((skill),(sc),SI_BLANK,SCB_NONE)
 // indicates that the status displays a visual effect for the affected unit, and should be sent to the client for all supported units
-#define set_sc_with_vfx(skill, sc, icon, flag) do { set_sc((skill), (sc), (icon), (flag)); if((icon) < SI_MAX) status->RelevantBLTypes[(icon)] |= BL_SCEFFECT; } while(0)
+#define set_sc_with_vfx(skill, sc, icon, flag) do { set_sc((skill), (sc), (icon), (flag)); if((icon) < SI_MAX) status->dbs->RelevantBLTypes[(icon)] |= BL_SCEFFECT; } while(0)
 
 	int i;
 
 	for (i = 0; i < SC_MAX; i++)
-		status->IconChangeTable[i] = SI_BLANK;
+		status->dbs->IconChangeTable[i] = SI_BLANK;
 
 	for (i = 0; i < MAX_SKILL; i++)
-		status->Skill2SCTable[i] = SC_NONE;
+		status->dbs->Skill2SCTable[i] = SC_NONE;
 
 	for (i = 0; i < SI_MAX; i++)
-		status->RelevantBLTypes[i] = BL_PC;
+		status->dbs->RelevantBLTypes[i] = BL_PC;
 
-	memset(status->SkillChangeTable, 0, sizeof(status->SkillChangeTable));
-	memset(status->ChangeFlagTable, 0, sizeof(status->ChangeFlagTable));
-	memset(status->DisplayType, 0, sizeof(status->DisplayType));
+	memset(status->dbs->SkillChangeTable, 0, sizeof(status->dbs->SkillChangeTable));
+	memset(status->dbs->ChangeFlagTable, 0, sizeof(status->dbs->ChangeFlagTable));
+	memset(status->dbs->DisplayType, 0, sizeof(status->dbs->DisplayType));
 
 	//First we define the skill for common ailments. These are used in skill_additional_effect through sc cards. [Skotlex]
 	set_sc( NPC_PETRIFYATTACK , SC_STONE     , SI_BLANK    , SCB_DEF_ELE|SCB_DEF|SCB_MDEF );
@@ -754,303 +782,309 @@ void initChangeTables(void) {
 	set_sc_with_vfx( GN_ILLUSIONDOPING   , SC_ILLUSIONDOPING    , SI_ILLUSIONDOPING     , SCB_HIT );
 
 	// Storing the target job rather than simply SC_SOULLINK simplifies code later on.
-	status->Skill2SCTable[SL_ALCHEMIST]   = (sc_type)MAPID_ALCHEMIST,
-		status->Skill2SCTable[SL_MONK]        = (sc_type)MAPID_MONK,
-		status->Skill2SCTable[SL_STAR]        = (sc_type)MAPID_STAR_GLADIATOR,
-		status->Skill2SCTable[SL_SAGE]        = (sc_type)MAPID_SAGE,
-		status->Skill2SCTable[SL_CRUSADER]    = (sc_type)MAPID_CRUSADER,
-		status->Skill2SCTable[SL_SUPERNOVICE] = (sc_type)MAPID_SUPER_NOVICE,
-		status->Skill2SCTable[SL_KNIGHT]      = (sc_type)MAPID_KNIGHT,
-		status->Skill2SCTable[SL_WIZARD]      = (sc_type)MAPID_WIZARD,
-		status->Skill2SCTable[SL_PRIEST]      = (sc_type)MAPID_PRIEST,
-		status->Skill2SCTable[SL_BARDDANCER]  = (sc_type)MAPID_BARDDANCER,
-		status->Skill2SCTable[SL_ROGUE]       = (sc_type)MAPID_ROGUE,
-		status->Skill2SCTable[SL_ASSASIN]     = (sc_type)MAPID_ASSASSIN,
-		status->Skill2SCTable[SL_BLACKSMITH]  = (sc_type)MAPID_BLACKSMITH,
-		status->Skill2SCTable[SL_HUNTER]      = (sc_type)MAPID_HUNTER,
-		status->Skill2SCTable[SL_SOULLINKER]  = (sc_type)MAPID_SOUL_LINKER,
+	status->dbs->Skill2SCTable[SL_ALCHEMIST]   = (sc_type)MAPID_ALCHEMIST,
+		status->dbs->Skill2SCTable[SL_MONK]        = (sc_type)MAPID_MONK,
+		status->dbs->Skill2SCTable[SL_STAR]        = (sc_type)MAPID_STAR_GLADIATOR,
+		status->dbs->Skill2SCTable[SL_SAGE]        = (sc_type)MAPID_SAGE,
+		status->dbs->Skill2SCTable[SL_CRUSADER]    = (sc_type)MAPID_CRUSADER,
+		status->dbs->Skill2SCTable[SL_SUPERNOVICE] = (sc_type)MAPID_SUPER_NOVICE,
+		status->dbs->Skill2SCTable[SL_KNIGHT]      = (sc_type)MAPID_KNIGHT,
+		status->dbs->Skill2SCTable[SL_WIZARD]      = (sc_type)MAPID_WIZARD,
+		status->dbs->Skill2SCTable[SL_PRIEST]      = (sc_type)MAPID_PRIEST,
+		status->dbs->Skill2SCTable[SL_BARDDANCER]  = (sc_type)MAPID_BARDDANCER,
+		status->dbs->Skill2SCTable[SL_ROGUE]       = (sc_type)MAPID_ROGUE,
+		status->dbs->Skill2SCTable[SL_ASSASIN]     = (sc_type)MAPID_ASSASSIN,
+		status->dbs->Skill2SCTable[SL_BLACKSMITH]  = (sc_type)MAPID_BLACKSMITH,
+		status->dbs->Skill2SCTable[SL_HUNTER]      = (sc_type)MAPID_HUNTER,
+		status->dbs->Skill2SCTable[SL_SOULLINKER]  = (sc_type)MAPID_SOUL_LINKER,
 
 	//Status that don't have a skill associated.
-	status->IconChangeTable[SC_WEIGHTOVER50] = SI_WEIGHTOVER50;
-	status->IconChangeTable[SC_WEIGHTOVER90] = SI_WEIGHTOVER90;
-	status->IconChangeTable[SC_ATTHASTE_POTION1] = SI_ATTHASTE_POTION1;
-	status->IconChangeTable[SC_ATTHASTE_POTION2] = SI_ATTHASTE_POTION2;
-	status->IconChangeTable[SC_ATTHASTE_POTION3] = SI_ATTHASTE_POTION3;
-	status->IconChangeTable[SC_ATTHASTE_INFINITY] = SI_ATTHASTE_INFINITY;
-	status->IconChangeTable[SC_MOVHASTE_HORSE] = SI_MOVHASTE_HORSE;
-	status->IconChangeTable[SC_MOVHASTE_INFINITY] = SI_MOVHASTE_INFINITY;
-	status->IconChangeTable[SC_CHASEWALK2] = SI_INCSTR;
-	status->IconChangeTable[SC_MIRACLE] = SI_SOULLINK;
-	status->IconChangeTable[SC_CLAIRVOYANCE] = SI_CLAIRVOYANCE;
-	status->IconChangeTable[SC_FOOD_STR] = SI_FOOD_STR;
-	status->IconChangeTable[SC_FOOD_AGI] = SI_FOOD_AGI;
-	status->IconChangeTable[SC_FOOD_VIT] = SI_FOOD_VIT;
-	status->IconChangeTable[SC_FOOD_INT] = SI_FOOD_INT;
-	status->IconChangeTable[SC_FOOD_DEX] = SI_FOOD_DEX;
-	status->IconChangeTable[SC_FOOD_LUK] = SI_FOOD_LUK;
-	status->IconChangeTable[SC_FOOD_BASICAVOIDANCE]= SI_FOOD_BASICAVOIDANCE;
-	status->IconChangeTable[SC_FOOD_BASICHIT] = SI_FOOD_BASICHIT;
-	status->IconChangeTable[SC_MANU_ATK] = SI_MANU_ATK;
-	status->IconChangeTable[SC_MANU_DEF] = SI_MANU_DEF;
-	status->IconChangeTable[SC_SPL_ATK] = SI_SPL_ATK;
-	status->IconChangeTable[SC_SPL_DEF] = SI_SPL_DEF;
-	status->IconChangeTable[SC_MANU_MATK] = SI_MANU_MATK;
-	status->IconChangeTable[SC_SPL_MATK] = SI_SPL_MATK;
-	status->IconChangeTable[SC_PLUSATTACKPOWER] = SI_PLUSATTACKPOWER;
-	status->IconChangeTable[SC_PLUSMAGICPOWER] = SI_PLUSMAGICPOWER;
+	status->dbs->IconChangeTable[SC_WEIGHTOVER50] = SI_WEIGHTOVER50;
+	status->dbs->IconChangeTable[SC_WEIGHTOVER90] = SI_WEIGHTOVER90;
+	status->dbs->IconChangeTable[SC_ATTHASTE_POTION1] = SI_ATTHASTE_POTION1;
+	status->dbs->IconChangeTable[SC_ATTHASTE_POTION2] = SI_ATTHASTE_POTION2;
+	status->dbs->IconChangeTable[SC_ATTHASTE_POTION3] = SI_ATTHASTE_POTION3;
+	status->dbs->IconChangeTable[SC_ATTHASTE_INFINITY] = SI_ATTHASTE_INFINITY;
+	status->dbs->IconChangeTable[SC_MOVHASTE_HORSE] = SI_MOVHASTE_HORSE;
+	status->dbs->IconChangeTable[SC_MOVHASTE_INFINITY] = SI_MOVHASTE_INFINITY;
+	status->dbs->IconChangeTable[SC_CHASEWALK2] = SI_INCSTR;
+	status->dbs->IconChangeTable[SC_MIRACLE] = SI_SOULLINK;
+	status->dbs->IconChangeTable[SC_CLAIRVOYANCE] = SI_CLAIRVOYANCE;
+	status->dbs->IconChangeTable[SC_FOOD_STR] = SI_FOOD_STR;
+	status->dbs->IconChangeTable[SC_FOOD_AGI] = SI_FOOD_AGI;
+	status->dbs->IconChangeTable[SC_FOOD_VIT] = SI_FOOD_VIT;
+	status->dbs->IconChangeTable[SC_FOOD_INT] = SI_FOOD_INT;
+	status->dbs->IconChangeTable[SC_FOOD_DEX] = SI_FOOD_DEX;
+	status->dbs->IconChangeTable[SC_FOOD_LUK] = SI_FOOD_LUK;
+	status->dbs->IconChangeTable[SC_FOOD_BASICAVOIDANCE]= SI_FOOD_BASICAVOIDANCE;
+	status->dbs->IconChangeTable[SC_FOOD_BASICHIT] = SI_FOOD_BASICHIT;
+	status->dbs->IconChangeTable[SC_MANU_ATK] = SI_MANU_ATK;
+	status->dbs->IconChangeTable[SC_MANU_DEF] = SI_MANU_DEF;
+	status->dbs->IconChangeTable[SC_SPL_ATK] = SI_SPL_ATK;
+	status->dbs->IconChangeTable[SC_SPL_DEF] = SI_SPL_DEF;
+	status->dbs->IconChangeTable[SC_MANU_MATK] = SI_MANU_MATK;
+	status->dbs->IconChangeTable[SC_SPL_MATK] = SI_SPL_MATK;
+	status->dbs->IconChangeTable[SC_PLUSATTACKPOWER] = SI_PLUSATTACKPOWER;
+	status->dbs->IconChangeTable[SC_PLUSMAGICPOWER] = SI_PLUSMAGICPOWER;
 	//Cash Items
-	status->IconChangeTable[SC_FOOD_STR_CASH] = SI_FOOD_STR_CASH;
-	status->IconChangeTable[SC_FOOD_AGI_CASH] = SI_FOOD_AGI_CASH;
-	status->IconChangeTable[SC_FOOD_VIT_CASH] = SI_FOOD_VIT_CASH;
-	status->IconChangeTable[SC_FOOD_DEX_CASH] = SI_FOOD_DEX_CASH;
-	status->IconChangeTable[SC_FOOD_INT_CASH] = SI_FOOD_INT_CASH;
-	status->IconChangeTable[SC_FOOD_LUK_CASH] = SI_FOOD_LUK_CASH;
-	status->IconChangeTable[SC_CASH_PLUSEXP] = SI_CASH_PLUSEXP;
-	status->IconChangeTable[SC_CASH_RECEIVEITEM] = SI_CASH_RECEIVEITEM;
-	status->IconChangeTable[SC_CASH_PLUSONLYJOBEXP] = SI_CASH_PLUSONLYJOBEXP;
-	status->IconChangeTable[SC_CASH_DEATHPENALTY] = SI_CASH_DEATHPENALTY;
-	status->IconChangeTable[SC_CASH_BOSS_ALARM] = SI_CASH_BOSS_ALARM;
-	status->IconChangeTable[SC_PROTECT_DEF] = SI_PROTECT_DEF;
-	status->IconChangeTable[SC_PROTECT_MDEF] = SI_PROTECT_MDEF;
-	status->IconChangeTable[SC_CRITICALPERCENT] = SI_CRITICALPERCENT;
-	status->IconChangeTable[SC_PLUSAVOIDVALUE] = SI_PLUSAVOIDVALUE;
-	status->IconChangeTable[SC_HEALPLUS] = SI_HEALPLUS;
-	status->IconChangeTable[SC_S_LIFEPOTION] = SI_S_LIFEPOTION;
-	status->IconChangeTable[SC_L_LIFEPOTION] = SI_L_LIFEPOTION;
-	status->IconChangeTable[SC_ATKER_BLOOD] = SI_ATKER_BLOOD;
-	status->IconChangeTable[SC_TARGET_BLOOD] = SI_TARGET_BLOOD;
+	status->dbs->IconChangeTable[SC_FOOD_STR_CASH] = SI_FOOD_STR_CASH;
+	status->dbs->IconChangeTable[SC_FOOD_AGI_CASH] = SI_FOOD_AGI_CASH;
+	status->dbs->IconChangeTable[SC_FOOD_VIT_CASH] = SI_FOOD_VIT_CASH;
+	status->dbs->IconChangeTable[SC_FOOD_DEX_CASH] = SI_FOOD_DEX_CASH;
+	status->dbs->IconChangeTable[SC_FOOD_INT_CASH] = SI_FOOD_INT_CASH;
+	status->dbs->IconChangeTable[SC_FOOD_LUK_CASH] = SI_FOOD_LUK_CASH;
+	status->dbs->IconChangeTable[SC_CASH_PLUSEXP] = SI_CASH_PLUSEXP;
+	status->dbs->IconChangeTable[SC_CASH_RECEIVEITEM] = SI_CASH_RECEIVEITEM;
+	status->dbs->IconChangeTable[SC_CASH_PLUSONLYJOBEXP] = SI_CASH_PLUSONLYJOBEXP;
+	status->dbs->IconChangeTable[SC_CASH_DEATHPENALTY] = SI_CASH_DEATHPENALTY;
+	status->dbs->IconChangeTable[SC_CASH_BOSS_ALARM] = SI_CASH_BOSS_ALARM;
+	status->dbs->IconChangeTable[SC_PROTECT_DEF] = SI_PROTECT_DEF;
+	status->dbs->IconChangeTable[SC_PROTECT_MDEF] = SI_PROTECT_MDEF;
+	status->dbs->IconChangeTable[SC_CRITICALPERCENT] = SI_CRITICALPERCENT;
+	status->dbs->IconChangeTable[SC_PLUSAVOIDVALUE] = SI_PLUSAVOIDVALUE;
+	status->dbs->IconChangeTable[SC_HEALPLUS] = SI_HEALPLUS;
+	status->dbs->IconChangeTable[SC_S_LIFEPOTION] = SI_S_LIFEPOTION;
+	status->dbs->IconChangeTable[SC_L_LIFEPOTION] = SI_L_LIFEPOTION;
+	status->dbs->IconChangeTable[SC_ATKER_BLOOD] = SI_ATKER_BLOOD;
+	status->dbs->IconChangeTable[SC_TARGET_BLOOD] = SI_TARGET_BLOOD;
 	// Mercenary Bonus Effects
-	status->IconChangeTable[SC_MER_FLEE] = SI_MER_FLEE;
-	status->IconChangeTable[SC_MER_ATK] = SI_MER_ATK;
-	status->IconChangeTable[SC_MER_HP] = SI_MER_HP;
-	status->IconChangeTable[SC_MER_SP] = SI_MER_SP;
-	status->IconChangeTable[SC_MER_HIT] = SI_MER_HIT;
+	status->dbs->IconChangeTable[SC_MER_FLEE] = SI_MER_FLEE;
+	status->dbs->IconChangeTable[SC_MER_ATK] = SI_MER_ATK;
+	status->dbs->IconChangeTable[SC_MER_HP] = SI_MER_HP;
+	status->dbs->IconChangeTable[SC_MER_SP] = SI_MER_SP;
+	status->dbs->IconChangeTable[SC_MER_HIT] = SI_MER_HIT;
 	// Warlock Spheres
-	status->IconChangeTable[SC_SUMMON1] = SI_SPHERE_1;
-	status->IconChangeTable[SC_SUMMON2] = SI_SPHERE_2;
-	status->IconChangeTable[SC_SUMMON3] = SI_SPHERE_3;
-	status->IconChangeTable[SC_SUMMON4] = SI_SPHERE_4;
-	status->IconChangeTable[SC_SUMMON5] = SI_SPHERE_5;
+	status->dbs->IconChangeTable[SC_SUMMON1] = SI_SPHERE_1;
+	status->dbs->IconChangeTable[SC_SUMMON2] = SI_SPHERE_2;
+	status->dbs->IconChangeTable[SC_SUMMON3] = SI_SPHERE_3;
+	status->dbs->IconChangeTable[SC_SUMMON4] = SI_SPHERE_4;
+	status->dbs->IconChangeTable[SC_SUMMON5] = SI_SPHERE_5;
 	// Warlock Preserved spells
-	status->IconChangeTable[SC_SPELLBOOK1] = SI_SPELLBOOK1;
-	status->IconChangeTable[SC_SPELLBOOK2] = SI_SPELLBOOK2;
-	status->IconChangeTable[SC_SPELLBOOK3] = SI_SPELLBOOK3;
-	status->IconChangeTable[SC_SPELLBOOK4] = SI_SPELLBOOK4;
-	status->IconChangeTable[SC_SPELLBOOK5] = SI_SPELLBOOK5;
-	status->IconChangeTable[SC_SPELLBOOK6] = SI_SPELLBOOK6;
-	status->IconChangeTable[SC_SPELLBOOK7] = SI_SPELLBOOK7;
+	status->dbs->IconChangeTable[SC_SPELLBOOK1] = SI_SPELLBOOK1;
+	status->dbs->IconChangeTable[SC_SPELLBOOK2] = SI_SPELLBOOK2;
+	status->dbs->IconChangeTable[SC_SPELLBOOK3] = SI_SPELLBOOK3;
+	status->dbs->IconChangeTable[SC_SPELLBOOK4] = SI_SPELLBOOK4;
+	status->dbs->IconChangeTable[SC_SPELLBOOK5] = SI_SPELLBOOK5;
+	status->dbs->IconChangeTable[SC_SPELLBOOK6] = SI_SPELLBOOK6;
+	status->dbs->IconChangeTable[SC_SPELLBOOK7] = SI_SPELLBOOK7;
 
-	status->IconChangeTable[SC_NEUTRALBARRIER_MASTER] = SI_NEUTRALBARRIER_MASTER;
-	status->IconChangeTable[SC_STEALTHFIELD_MASTER] = SI_STEALTHFIELD_MASTER;
-	status->IconChangeTable[SC_OVERHEAT] = SI_OVERHEAT;
-	status->IconChangeTable[SC_OVERHEAT_LIMITPOINT] = SI_OVERHEAT_LIMITPOINT;
+	status->dbs->IconChangeTable[SC_NEUTRALBARRIER_MASTER] = SI_NEUTRALBARRIER_MASTER;
+	status->dbs->IconChangeTable[SC_STEALTHFIELD_MASTER] = SI_STEALTHFIELD_MASTER;
+	status->dbs->IconChangeTable[SC_OVERHEAT] = SI_OVERHEAT;
+	status->dbs->IconChangeTable[SC_OVERHEAT_LIMITPOINT] = SI_OVERHEAT_LIMITPOINT;
 
-	status->IconChangeTable[SC_HALLUCINATIONWALK_POSTDELAY] = SI_HALLUCINATIONWALK_POSTDELAY;
-	status->IconChangeTable[SC_TOXIN] = SI_TOXIN;
-	status->IconChangeTable[SC_PARALYSE] = SI_PARALYSE;
-	status->IconChangeTable[SC_VENOMBLEED] = SI_VENOMBLEED;
-	status->IconChangeTable[SC_MAGICMUSHROOM] = SI_MAGICMUSHROOM;
-	status->IconChangeTable[SC_DEATHHURT] = SI_DEATHHURT;
-	status->IconChangeTable[SC_PYREXIA] = SI_PYREXIA;
-	status->IconChangeTable[SC_OBLIVIONCURSE] = SI_OBLIVIONCURSE;
-	status->IconChangeTable[SC_LEECHESEND] = SI_LEECHESEND;
+	status->dbs->IconChangeTable[SC_HALLUCINATIONWALK_POSTDELAY] = SI_HALLUCINATIONWALK_POSTDELAY;
+	status->dbs->IconChangeTable[SC_TOXIN] = SI_TOXIN;
+	status->dbs->IconChangeTable[SC_PARALYSE] = SI_PARALYSE;
+	status->dbs->IconChangeTable[SC_VENOMBLEED] = SI_VENOMBLEED;
+	status->dbs->IconChangeTable[SC_MAGICMUSHROOM] = SI_MAGICMUSHROOM;
+	status->dbs->IconChangeTable[SC_DEATHHURT] = SI_DEATHHURT;
+	status->dbs->IconChangeTable[SC_PYREXIA] = SI_PYREXIA;
+	status->dbs->IconChangeTable[SC_OBLIVIONCURSE] = SI_OBLIVIONCURSE;
+	status->dbs->IconChangeTable[SC_LEECHESEND] = SI_LEECHESEND;
 
-	status->IconChangeTable[SC_SHIELDSPELL_DEF] = SI_SHIELDSPELL_DEF;
-	status->IconChangeTable[SC_SHIELDSPELL_MDEF] = SI_SHIELDSPELL_MDEF;
-	status->IconChangeTable[SC_SHIELDSPELL_REF] = SI_SHIELDSPELL_REF;
-	status->IconChangeTable[SC_BANDING_DEFENCE] = SI_BANDING_DEFENCE;
+	status->dbs->IconChangeTable[SC_SHIELDSPELL_DEF] = SI_SHIELDSPELL_DEF;
+	status->dbs->IconChangeTable[SC_SHIELDSPELL_MDEF] = SI_SHIELDSPELL_MDEF;
+	status->dbs->IconChangeTable[SC_SHIELDSPELL_REF] = SI_SHIELDSPELL_REF;
+	status->dbs->IconChangeTable[SC_BANDING_DEFENCE] = SI_BANDING_DEFENCE;
 
-	status->IconChangeTable[SC_CURSEDCIRCLE_ATKER] = SI_CURSEDCIRCLE_ATKER;
+	status->dbs->IconChangeTable[SC_CURSEDCIRCLE_ATKER] = SI_CURSEDCIRCLE_ATKER;
 
-	status->IconChangeTable[SC_STOMACHACHE] = SI_STOMACHACHE;
-	status->IconChangeTable[SC_MYSTERIOUS_POWDER] = SI_MYSTERIOUS_POWDER;
-	status->IconChangeTable[SC_MELON_BOMB] = SI_MELON_BOMB;
-	status->IconChangeTable[SC_BANANA_BOMB] = SI_BANANA_BOMB;
-	status->IconChangeTable[SC_BANANA_BOMB_SITDOWN_POSTDELAY] = SI_BANANA_BOMB_SITDOWN_POSTDELAY;
+	status->dbs->IconChangeTable[SC_STOMACHACHE] = SI_STOMACHACHE;
+	status->dbs->IconChangeTable[SC_MYSTERIOUS_POWDER] = SI_MYSTERIOUS_POWDER;
+	status->dbs->IconChangeTable[SC_MELON_BOMB] = SI_MELON_BOMB;
+	status->dbs->IconChangeTable[SC_BANANA_BOMB] = SI_BANANA_BOMB;
+	status->dbs->IconChangeTable[SC_BANANA_BOMB_SITDOWN_POSTDELAY] = SI_BANANA_BOMB_SITDOWN_POSTDELAY;
 
 	//Genetics New Food Items Status Icons
-	status->IconChangeTable[SC_SAVAGE_STEAK] = SI_SAVAGE_STEAK;
-	status->IconChangeTable[SC_COCKTAIL_WARG_BLOOD] = SI_COCKTAIL_WARG_BLOOD;
-	status->IconChangeTable[SC_MINOR_BBQ] = SI_MINOR_BBQ;
-	status->IconChangeTable[SC_SIROMA_ICE_TEA] = SI_SIROMA_ICE_TEA;
-	status->IconChangeTable[SC_DROCERA_HERB_STEAMED] = SI_DROCERA_HERB_STEAMED;
-	status->IconChangeTable[SC_PUTTI_TAILS_NOODLES] = SI_PUTTI_TAILS_NOODLES;
+	status->dbs->IconChangeTable[SC_SAVAGE_STEAK] = SI_SAVAGE_STEAK;
+	status->dbs->IconChangeTable[SC_COCKTAIL_WARG_BLOOD] = SI_COCKTAIL_WARG_BLOOD;
+	status->dbs->IconChangeTable[SC_MINOR_BBQ] = SI_MINOR_BBQ;
+	status->dbs->IconChangeTable[SC_SIROMA_ICE_TEA] = SI_SIROMA_ICE_TEA;
+	status->dbs->IconChangeTable[SC_DROCERA_HERB_STEAMED] = SI_DROCERA_HERB_STEAMED;
+	status->dbs->IconChangeTable[SC_PUTTI_TAILS_NOODLES] = SI_PUTTI_TAILS_NOODLES;
 
-	status->IconChangeTable[SC_BOOST500] |= SI_BOOST500;
-	status->IconChangeTable[SC_FULL_SWING_K] |= SI_FULL_SWING_K;
-	status->IconChangeTable[SC_MANA_PLUS] |= SI_MANA_PLUS;
-	status->IconChangeTable[SC_MUSTLE_M] |= SI_MUSTLE_M;
-	status->IconChangeTable[SC_LIFE_FORCE_F] |= SI_LIFE_FORCE_F;
-	status->IconChangeTable[SC_EXTRACT_WHITE_POTION_Z] |= SI_EXTRACT_WHITE_POTION_Z;
-	status->IconChangeTable[SC_VITATA_500] |= SI_VITATA_500;
-	status->IconChangeTable[SC_EXTRACT_SALAMINE_JUICE] |= SI_EXTRACT_SALAMINE_JUICE;
+	status->dbs->IconChangeTable[SC_BOOST500] |= SI_BOOST500;
+	status->dbs->IconChangeTable[SC_FULL_SWING_K] |= SI_FULL_SWING_K;
+	status->dbs->IconChangeTable[SC_MANA_PLUS] |= SI_MANA_PLUS;
+	status->dbs->IconChangeTable[SC_MUSTLE_M] |= SI_MUSTLE_M;
+	status->dbs->IconChangeTable[SC_LIFE_FORCE_F] |= SI_LIFE_FORCE_F;
+	status->dbs->IconChangeTable[SC_EXTRACT_WHITE_POTION_Z] |= SI_EXTRACT_WHITE_POTION_Z;
+	status->dbs->IconChangeTable[SC_VITATA_500] |= SI_VITATA_500;
+	status->dbs->IconChangeTable[SC_EXTRACT_SALAMINE_JUICE] |= SI_EXTRACT_SALAMINE_JUICE;
 
 	// Elemental Spirit's 'side' status change icons.
-	status->IconChangeTable[SC_CIRCLE_OF_FIRE] = SI_CIRCLE_OF_FIRE;
-	status->IconChangeTable[SC_FIRE_CLOAK] = SI_FIRE_CLOAK;
-	status->IconChangeTable[SC_WATER_SCREEN] = SI_WATER_SCREEN;
-	status->IconChangeTable[SC_WATER_DROP] = SI_WATER_DROP;
-	status->IconChangeTable[SC_WIND_STEP] = SI_WIND_STEP;
-	status->IconChangeTable[SC_WIND_CURTAIN] = SI_WIND_CURTAIN;
-	status->IconChangeTable[SC_SOLID_SKIN] = SI_SOLID_SKIN;
-	status->IconChangeTable[SC_STONE_SHIELD] = SI_STONE_SHIELD;
-	status->IconChangeTable[SC_PYROTECHNIC] = SI_PYROTECHNIC;
-	status->IconChangeTable[SC_HEATER] = SI_HEATER;
-	status->IconChangeTable[SC_TROPIC] = SI_TROPIC;
-	status->IconChangeTable[SC_AQUAPLAY] = SI_AQUAPLAY;
-	status->IconChangeTable[SC_COOLER] = SI_COOLER;
-	status->IconChangeTable[SC_CHILLY_AIR] = SI_CHILLY_AIR;
-	status->IconChangeTable[SC_GUST] = SI_GUST;
-	status->IconChangeTable[SC_BLAST] = SI_BLAST;
-	status->IconChangeTable[SC_WILD_STORM] = SI_WILD_STORM;
-	status->IconChangeTable[SC_PETROLOGY] = SI_PETROLOGY;
-	status->IconChangeTable[SC_CURSED_SOIL] = SI_CURSED_SOIL;
-	status->IconChangeTable[SC_UPHEAVAL] = SI_UPHEAVAL;
-	status->IconChangeTable[SC_PUSH_CART] = SI_ON_PUSH_CART;
-	status->IconChangeTable[SC_REBOUND] = SI_REBOUND;
-	status->IconChangeTable[SC_ALL_RIDING] = SI_ALL_RIDING;
-	status->IconChangeTable[SC_MONSTER_TRANSFORM] = SI_MONSTER_TRANSFORM;
-	status->IconChangeTable[SC_MOONSTAR] = SI_MOONSTAR;
-	status->IconChangeTable[SC_SUPER_STAR] = SI_SUPER_STAR;
-	status->IconChangeTable[SC_STRANGELIGHTS] = SI_STRANGELIGHTS;
-	status->IconChangeTable[SC_DECORATION_OF_MUSIC] = SI_DECORATION_OF_MUSIC;
+	status->dbs->IconChangeTable[SC_CIRCLE_OF_FIRE] = SI_CIRCLE_OF_FIRE;
+	status->dbs->IconChangeTable[SC_FIRE_CLOAK] = SI_FIRE_CLOAK;
+	status->dbs->IconChangeTable[SC_WATER_SCREEN] = SI_WATER_SCREEN;
+	status->dbs->IconChangeTable[SC_WATER_DROP] = SI_WATER_DROP;
+	status->dbs->IconChangeTable[SC_WIND_STEP] = SI_WIND_STEP;
+	status->dbs->IconChangeTable[SC_WIND_CURTAIN] = SI_WIND_CURTAIN;
+	status->dbs->IconChangeTable[SC_SOLID_SKIN] = SI_SOLID_SKIN;
+	status->dbs->IconChangeTable[SC_STONE_SHIELD] = SI_STONE_SHIELD;
+	status->dbs->IconChangeTable[SC_PYROTECHNIC] = SI_PYROTECHNIC;
+	status->dbs->IconChangeTable[SC_HEATER] = SI_HEATER;
+	status->dbs->IconChangeTable[SC_TROPIC] = SI_TROPIC;
+	status->dbs->IconChangeTable[SC_AQUAPLAY] = SI_AQUAPLAY;
+	status->dbs->IconChangeTable[SC_COOLER] = SI_COOLER;
+	status->dbs->IconChangeTable[SC_CHILLY_AIR] = SI_CHILLY_AIR;
+	status->dbs->IconChangeTable[SC_GUST] = SI_GUST;
+	status->dbs->IconChangeTable[SC_BLAST] = SI_BLAST;
+	status->dbs->IconChangeTable[SC_WILD_STORM] = SI_WILD_STORM;
+	status->dbs->IconChangeTable[SC_PETROLOGY] = SI_PETROLOGY;
+	status->dbs->IconChangeTable[SC_CURSED_SOIL] = SI_CURSED_SOIL;
+	status->dbs->IconChangeTable[SC_UPHEAVAL] = SI_UPHEAVAL;
+	status->dbs->IconChangeTable[SC_PUSH_CART] = SI_ON_PUSH_CART;
+	status->dbs->IconChangeTable[SC_REBOUND] = SI_REBOUND;
+	status->dbs->IconChangeTable[SC_ALL_RIDING] = SI_ALL_RIDING;
+	status->dbs->IconChangeTable[SC_MONSTER_TRANSFORM] = SI_MONSTER_TRANSFORM;
+	status->dbs->IconChangeTable[SC_MOONSTAR] = SI_MOONSTAR;
+	status->dbs->IconChangeTable[SC_SUPER_STAR] = SI_SUPER_STAR;
+	status->dbs->IconChangeTable[SC_STRANGELIGHTS] = SI_STRANGELIGHTS;
+	status->dbs->IconChangeTable[SC_DECORATION_OF_MUSIC] = SI_DECORATION_OF_MUSIC;
+	status->dbs->IconChangeTable[SC_LJOSALFAR] = SI_LJOSALFAR;
+	status->dbs->IconChangeTable[SC_MERMAID_LONGING] = SI_MERMAID_LONGING;
 
 	//Other SC which are not necessarily associated to skills.
-	status->ChangeFlagTable[SC_ATTHASTE_POTION1] = SCB_ASPD;
-	status->ChangeFlagTable[SC_ATTHASTE_POTION2] = SCB_ASPD;
-	status->ChangeFlagTable[SC_ATTHASTE_POTION3] = SCB_ASPD;
-	status->ChangeFlagTable[SC_ATTHASTE_INFINITY] = SCB_ASPD;
-	status->ChangeFlagTable[SC_MOVHASTE_HORSE] = SCB_SPEED;
-	status->ChangeFlagTable[SC_MOVHASTE_INFINITY] = SCB_SPEED;
-	status->ChangeFlagTable[SC_PLUSATTACKPOWER] = SCB_BATK;
-	status->ChangeFlagTable[SC_PLUSMAGICPOWER] = SCB_MATK;
-	status->ChangeFlagTable[SC_INCALLSTATUS] |= SCB_STR|SCB_AGI|SCB_VIT|SCB_INT|SCB_DEX|SCB_LUK;
-	status->ChangeFlagTable[SC_CHASEWALK2] |= SCB_STR;
-	status->ChangeFlagTable[SC_INCAGI] |= SCB_AGI;
-	status->ChangeFlagTable[SC_INCVIT] |= SCB_VIT;
-	status->ChangeFlagTable[SC_INCINT] |= SCB_INT;
-	status->ChangeFlagTable[SC_INCDEX] |= SCB_DEX;
-	status->ChangeFlagTable[SC_INCLUK] |= SCB_LUK;
-	status->ChangeFlagTable[SC_INCHIT] |= SCB_HIT;
-	status->ChangeFlagTable[SC_INCHITRATE] |= SCB_HIT;
-	status->ChangeFlagTable[SC_INCFLEE] |= SCB_FLEE;
-	status->ChangeFlagTable[SC_INCFLEERATE] |= SCB_FLEE;
-	status->ChangeFlagTable[SC_MTF_HITFLEE] |= SCB_HIT|SCB_FLEE;
-	status->ChangeFlagTable[SC_CRITICALPERCENT] |= SCB_CRI;
-	status->ChangeFlagTable[SC_INCASPDRATE] |= SCB_ASPD;
-	status->ChangeFlagTable[SC_PLUSAVOIDVALUE] |= SCB_FLEE2;
-	status->ChangeFlagTable[SC_INCMHPRATE] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_INCMSPRATE] |= SCB_MAXSP;
-	status->ChangeFlagTable[SC_INCMHP] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_MTF_MHP] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_INCMSP] |= SCB_MAXSP;
-	status->ChangeFlagTable[SC_MTF_MSP] |= SCB_MAXSP;
-	status->ChangeFlagTable[SC_INCATKRATE] |= SCB_BATK|SCB_WATK;
-	status->ChangeFlagTable[SC_INCMATKRATE] |= SCB_MATK;
-	status->ChangeFlagTable[SC_INCDEFRATE] |= SCB_DEF;
-	status->ChangeFlagTable[SC_FOOD_STR] |= SCB_STR;
-	status->ChangeFlagTable[SC_FOOD_AGI] |= SCB_AGI;
-	status->ChangeFlagTable[SC_FOOD_VIT] |= SCB_VIT;
-	status->ChangeFlagTable[SC_FOOD_INT] |= SCB_INT;
-	status->ChangeFlagTable[SC_FOOD_DEX] |= SCB_DEX;
-	status->ChangeFlagTable[SC_FOOD_LUK] |= SCB_LUK;
-	status->ChangeFlagTable[SC_FOOD_BASICHIT] |= SCB_HIT;
-	status->ChangeFlagTable[SC_FOOD_BASICAVOIDANCE] |= SCB_FLEE;
-	status->ChangeFlagTable[SC_BATKFOOD] |= SCB_BATK;
-	status->ChangeFlagTable[SC_WATKFOOD] |= SCB_WATK;
-	status->ChangeFlagTable[SC_MATKFOOD] |= SCB_MATK;
-	status->ChangeFlagTable[SC_ARMORPROPERTY] |= SCB_ALL;
-	status->ChangeFlagTable[SC_ARMOR_RESIST] |= SCB_ALL;
-	status->ChangeFlagTable[SC_ATKER_BLOOD] |= SCB_ALL;
-	status->ChangeFlagTable[SC_WALKSPEED] |= SCB_SPEED;
-	status->ChangeFlagTable[SC_ITEMSCRIPT] |= SCB_ALL;
+	status->dbs->ChangeFlagTable[SC_ATTHASTE_POTION1] = SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_ATTHASTE_POTION2] = SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_ATTHASTE_POTION3] = SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_ATTHASTE_INFINITY] = SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_MOVHASTE_HORSE] = SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_MOVHASTE_INFINITY] = SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_PLUSATTACKPOWER] = SCB_BATK;
+	status->dbs->ChangeFlagTable[SC_PLUSMAGICPOWER] = SCB_MATK;
+	status->dbs->ChangeFlagTable[SC_INCALLSTATUS] |= SCB_STR|SCB_AGI|SCB_VIT|SCB_INT|SCB_DEX|SCB_LUK;
+	status->dbs->ChangeFlagTable[SC_CHASEWALK2] |= SCB_STR;
+	status->dbs->ChangeFlagTable[SC_INCAGI] |= SCB_AGI;
+	status->dbs->ChangeFlagTable[SC_INCVIT] |= SCB_VIT;
+	status->dbs->ChangeFlagTable[SC_INCINT] |= SCB_INT;
+	status->dbs->ChangeFlagTable[SC_INCDEX] |= SCB_DEX;
+	status->dbs->ChangeFlagTable[SC_INCLUK] |= SCB_LUK;
+	status->dbs->ChangeFlagTable[SC_INCHIT] |= SCB_HIT;
+	status->dbs->ChangeFlagTable[SC_INCHITRATE] |= SCB_HIT;
+	status->dbs->ChangeFlagTable[SC_INCFLEE] |= SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_INCFLEERATE] |= SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_MTF_HITFLEE] |= SCB_HIT|SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_CRITICALPERCENT] |= SCB_CRI;
+	status->dbs->ChangeFlagTable[SC_INCASPDRATE] |= SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_PLUSAVOIDVALUE] |= SCB_FLEE2;
+	status->dbs->ChangeFlagTable[SC_INCMHPRATE] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_INCMSPRATE] |= SCB_MAXSP;
+	status->dbs->ChangeFlagTable[SC_INCMHP] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_MTF_MHP] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_INCMSP] |= SCB_MAXSP;
+	status->dbs->ChangeFlagTable[SC_MTF_MSP] |= SCB_MAXSP;
+	status->dbs->ChangeFlagTable[SC_INCATKRATE] |= SCB_BATK|SCB_WATK;
+	status->dbs->ChangeFlagTable[SC_INCMATKRATE] |= SCB_MATK;
+	status->dbs->ChangeFlagTable[SC_INCDEFRATE] |= SCB_DEF;
+	status->dbs->ChangeFlagTable[SC_FOOD_STR] |= SCB_STR;
+	status->dbs->ChangeFlagTable[SC_FOOD_AGI] |= SCB_AGI;
+	status->dbs->ChangeFlagTable[SC_FOOD_VIT] |= SCB_VIT;
+	status->dbs->ChangeFlagTable[SC_FOOD_INT] |= SCB_INT;
+	status->dbs->ChangeFlagTable[SC_FOOD_DEX] |= SCB_DEX;
+	status->dbs->ChangeFlagTable[SC_FOOD_LUK] |= SCB_LUK;
+	status->dbs->ChangeFlagTable[SC_FOOD_BASICHIT] |= SCB_HIT;
+	status->dbs->ChangeFlagTable[SC_FOOD_BASICAVOIDANCE] |= SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_BATKFOOD] |= SCB_BATK;
+	status->dbs->ChangeFlagTable[SC_WATKFOOD] |= SCB_WATK;
+	status->dbs->ChangeFlagTable[SC_MATKFOOD] |= SCB_MATK;
+	status->dbs->ChangeFlagTable[SC_ARMORPROPERTY] |= SCB_ALL;
+	status->dbs->ChangeFlagTable[SC_ARMOR_RESIST] |= SCB_ALL;
+	status->dbs->ChangeFlagTable[SC_ATKER_BLOOD] |= SCB_ALL;
+	status->dbs->ChangeFlagTable[SC_WALKSPEED] |= SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_ITEMSCRIPT] |= SCB_ALL;
 	// Cash Items
-	status->ChangeFlagTable[SC_FOOD_STR_CASH] = SCB_STR;
-	status->ChangeFlagTable[SC_FOOD_AGI_CASH] = SCB_AGI;
-	status->ChangeFlagTable[SC_FOOD_VIT_CASH] = SCB_VIT;
-	status->ChangeFlagTable[SC_FOOD_DEX_CASH] = SCB_DEX;
-	status->ChangeFlagTable[SC_FOOD_INT_CASH] = SCB_INT;
-	status->ChangeFlagTable[SC_FOOD_LUK_CASH] = SCB_LUK;
+	status->dbs->ChangeFlagTable[SC_FOOD_STR_CASH] = SCB_STR;
+	status->dbs->ChangeFlagTable[SC_FOOD_AGI_CASH] = SCB_AGI;
+	status->dbs->ChangeFlagTable[SC_FOOD_VIT_CASH] = SCB_VIT;
+	status->dbs->ChangeFlagTable[SC_FOOD_DEX_CASH] = SCB_DEX;
+	status->dbs->ChangeFlagTable[SC_FOOD_INT_CASH] = SCB_INT;
+	status->dbs->ChangeFlagTable[SC_FOOD_LUK_CASH] = SCB_LUK;
 	// Mercenary Bonus Effects
-	status->ChangeFlagTable[SC_MER_FLEE] |= SCB_FLEE;
-	status->ChangeFlagTable[SC_MER_ATK] |= SCB_WATK;
-	status->ChangeFlagTable[SC_MER_HP] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_MER_SP] |= SCB_MAXSP;
-	status->ChangeFlagTable[SC_MER_HIT] |= SCB_HIT;
+	status->dbs->ChangeFlagTable[SC_MER_FLEE] |= SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_MER_ATK] |= SCB_WATK;
+	status->dbs->ChangeFlagTable[SC_MER_HP] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_MER_SP] |= SCB_MAXSP;
+	status->dbs->ChangeFlagTable[SC_MER_HIT] |= SCB_HIT;
 	// Guillotine Cross Poison Effects
-	status->ChangeFlagTable[SC_PARALYSE] |= SCB_FLEE|SCB_SPEED|SCB_ASPD;
-	status->ChangeFlagTable[SC_VENOMBLEED] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_MAGICMUSHROOM] |= SCB_REGEN;
-	status->ChangeFlagTable[SC_DEATHHURT] |= SCB_REGEN;
-	status->ChangeFlagTable[SC_PYREXIA] |= SCB_HIT|SCB_FLEE;
-	status->ChangeFlagTable[SC_OBLIVIONCURSE] |= SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_PARALYSE] |= SCB_FLEE|SCB_SPEED|SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_VENOMBLEED] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_MAGICMUSHROOM] |= SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_DEATHHURT] |= SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_PYREXIA] |= SCB_HIT|SCB_FLEE;
+	status->dbs->ChangeFlagTable[SC_OBLIVIONCURSE] |= SCB_REGEN;
 	// RG status
-	status->ChangeFlagTable[SC_SHIELDSPELL_DEF] |= SCB_WATK;
-	status->ChangeFlagTable[SC_SHIELDSPELL_REF] |= SCB_DEF;
+	status->dbs->ChangeFlagTable[SC_SHIELDSPELL_DEF] |= SCB_WATK;
+	status->dbs->ChangeFlagTable[SC_SHIELDSPELL_REF] |= SCB_DEF;
 	// Meca status
-	status->ChangeFlagTable[SC_STEALTHFIELD_MASTER] |= SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_STEALTHFIELD_MASTER] |= SCB_SPEED;
 
-	status->ChangeFlagTable[SC_SAVAGE_STEAK] |= SCB_STR;
-	status->ChangeFlagTable[SC_COCKTAIL_WARG_BLOOD] |= SCB_INT;
-	status->ChangeFlagTable[SC_MINOR_BBQ] |= SCB_VIT;
-	status->ChangeFlagTable[SC_SIROMA_ICE_TEA] |= SCB_DEX;
-	status->ChangeFlagTable[SC_DROCERA_HERB_STEAMED] |= SCB_AGI;
-	status->ChangeFlagTable[SC_PUTTI_TAILS_NOODLES] |= SCB_LUK;
-	status->ChangeFlagTable[SC_BOOST500] |= SCB_ASPD;
-	status->ChangeFlagTable[SC_FULL_SWING_K] |= SCB_BATK;
-	status->ChangeFlagTable[SC_MANA_PLUS] |= SCB_MATK;
-	status->ChangeFlagTable[SC_MUSTLE_M] |= SCB_MAXHP;
-	status->ChangeFlagTable[SC_LIFE_FORCE_F] |= SCB_MAXSP;
-	status->ChangeFlagTable[SC_EXTRACT_WHITE_POTION_Z] |= SCB_REGEN;
-	status->ChangeFlagTable[SC_VITATA_500] |= SCB_REGEN;
-	status->ChangeFlagTable[SC_EXTRACT_SALAMINE_JUICE] |= SCB_ASPD;
-	status->ChangeFlagTable[SC_REBOUND] |= SCB_SPEED|SCB_REGEN;
-	status->ChangeFlagTable[SC_DEFSET] |= SCB_DEF|SCB_DEF2;
-	status->ChangeFlagTable[SC_MDEFSET] |= SCB_MDEF|SCB_MDEF2;
-	status->ChangeFlagTable[SC_MYSTERIOUS_POWDER] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_SAVAGE_STEAK] |= SCB_STR;
+	status->dbs->ChangeFlagTable[SC_COCKTAIL_WARG_BLOOD] |= SCB_INT;
+	status->dbs->ChangeFlagTable[SC_MINOR_BBQ] |= SCB_VIT;
+	status->dbs->ChangeFlagTable[SC_SIROMA_ICE_TEA] |= SCB_DEX;
+	status->dbs->ChangeFlagTable[SC_DROCERA_HERB_STEAMED] |= SCB_AGI;
+	status->dbs->ChangeFlagTable[SC_PUTTI_TAILS_NOODLES] |= SCB_LUK;
+	status->dbs->ChangeFlagTable[SC_BOOST500] |= SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_FULL_SWING_K] |= SCB_BATK;
+	status->dbs->ChangeFlagTable[SC_MANA_PLUS] |= SCB_MATK;
+	status->dbs->ChangeFlagTable[SC_MUSTLE_M] |= SCB_MAXHP;
+	status->dbs->ChangeFlagTable[SC_LIFE_FORCE_F] |= SCB_MAXSP;
+	status->dbs->ChangeFlagTable[SC_EXTRACT_WHITE_POTION_Z] |= SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_VITATA_500] |= SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_EXTRACT_SALAMINE_JUICE] |= SCB_ASPD;
+	status->dbs->ChangeFlagTable[SC_REBOUND] |= SCB_SPEED|SCB_REGEN;
+	status->dbs->ChangeFlagTable[SC_DEFSET] |= SCB_DEF|SCB_DEF2;
+	status->dbs->ChangeFlagTable[SC_MDEFSET] |= SCB_MDEF|SCB_MDEF2;
+	status->dbs->ChangeFlagTable[SC_MYSTERIOUS_POWDER] |= SCB_MAXHP;
 
-	status->ChangeFlagTable[SC_ALL_RIDING] = SCB_SPEED;
-	status->ChangeFlagTable[SC_WEDDING] = SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_ALL_RIDING] = SCB_SPEED;
+	status->dbs->ChangeFlagTable[SC_WEDDING] = SCB_SPEED;
 
-	status->ChangeFlagTable[SC_MTF_ASPD] = SCB_ASPD|SCB_HIT;
-	status->ChangeFlagTable[SC_MTF_MATK] = SCB_MATK;
-	status->ChangeFlagTable[SC_MTF_MLEATKED] |= SCB_ALL;
+	status->dbs->ChangeFlagTable[SC_MTF_ASPD] = SCB_ASPD|SCB_HIT;
+	status->dbs->ChangeFlagTable[SC_MTF_MATK] = SCB_MATK;
+	status->dbs->ChangeFlagTable[SC_MTF_MLEATKED] |= SCB_ALL;
 
-	status->ChangeFlagTable[SC_MOONSTAR] |= SCB_NONE;
-	status->ChangeFlagTable[SC_SUPER_STAR] |= SCB_NONE;
-	status->ChangeFlagTable[SC_STRANGELIGHTS] |= SCB_NONE;
-	status->ChangeFlagTable[SC_DECORATION_OF_MUSIC] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_MOONSTAR] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_SUPER_STAR] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_STRANGELIGHTS] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_DECORATION_OF_MUSIC] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_LJOSALFAR] |= SCB_NONE;
+	status->dbs->ChangeFlagTable[SC_MERMAID_LONGING] |= SCB_NONE;
 
-	/* status->DisplayType Table [Ind/Hercules] */
-	status->DisplayType[SC_ALL_RIDING]          = true;
-	status->DisplayType[SC_PUSH_CART]           = true;
-	status->DisplayType[SC_SUMMON1]             = true;
-	status->DisplayType[SC_SUMMON2]             = true;
-	status->DisplayType[SC_SUMMON3]             = true;
-	status->DisplayType[SC_SUMMON4]             = true;
-	status->DisplayType[SC_SUMMON5]             = true;
-	status->DisplayType[SC_CAMOUFLAGE]          = true;
-	status->DisplayType[SC_DUPLELIGHT]          = true;
-	status->DisplayType[SC_ORATIO]              = true;
-	status->DisplayType[SC_FROSTMISTY]          = true;
-	status->DisplayType[SC_VENOMIMPRESS]        = true;
-	status->DisplayType[SC_HALLUCINATIONWALK]   = true;
-	status->DisplayType[SC_ROLLINGCUTTER]       = true;
-	status->DisplayType[SC_BANDING]             = true;
-	status->DisplayType[SC_COLD]                = true;
-	status->DisplayType[SC_DEEP_SLEEP]          = true;
-	status->DisplayType[SC_CURSEDCIRCLE_ATKER]  = true;
-	status->DisplayType[SC_CURSEDCIRCLE_TARGET] = true;
-	status->DisplayType[SC_BLOOD_SUCKER]        = true;
-	status->DisplayType[SC__SHADOWFORM]         = true;
-	status->DisplayType[SC_MONSTER_TRANSFORM]   = true;
-	status->DisplayType[SC_MOONSTAR]            = true;
-	status->DisplayType[SC_SUPER_STAR]          = true;
-	status->DisplayType[SC_STRANGELIGHTS]       = true;
-	status->DisplayType[SC_DECORATION_OF_MUSIC] = true;
+	/* status->dbs->DisplayType Table [Ind/Hercules] */
+	status->dbs->DisplayType[SC_ALL_RIDING]          = true;
+	status->dbs->DisplayType[SC_PUSH_CART]           = true;
+	status->dbs->DisplayType[SC_SUMMON1]             = true;
+	status->dbs->DisplayType[SC_SUMMON2]             = true;
+	status->dbs->DisplayType[SC_SUMMON3]             = true;
+	status->dbs->DisplayType[SC_SUMMON4]             = true;
+	status->dbs->DisplayType[SC_SUMMON5]             = true;
+	status->dbs->DisplayType[SC_CAMOUFLAGE]          = true;
+	status->dbs->DisplayType[SC_DUPLELIGHT]          = true;
+	status->dbs->DisplayType[SC_ORATIO]              = true;
+	status->dbs->DisplayType[SC_FROSTMISTY]          = true;
+	status->dbs->DisplayType[SC_VENOMIMPRESS]        = true;
+	status->dbs->DisplayType[SC_HALLUCINATIONWALK]   = true;
+	status->dbs->DisplayType[SC_ROLLINGCUTTER]       = true;
+	status->dbs->DisplayType[SC_BANDING]             = true;
+	status->dbs->DisplayType[SC_COLD]                = true;
+	status->dbs->DisplayType[SC_DEEP_SLEEP]          = true;
+	status->dbs->DisplayType[SC_CURSEDCIRCLE_ATKER]  = true;
+	status->dbs->DisplayType[SC_CURSEDCIRCLE_TARGET] = true;
+	status->dbs->DisplayType[SC_BLOOD_SUCKER]        = true;
+	status->dbs->DisplayType[SC__SHADOWFORM]         = true;
+	status->dbs->DisplayType[SC_MONSTER_TRANSFORM]   = true;
+	status->dbs->DisplayType[SC_MOONSTAR]            = true;
+	status->dbs->DisplayType[SC_SUPER_STAR]          = true;
+	status->dbs->DisplayType[SC_STRANGELIGHTS]       = true;
+	status->dbs->DisplayType[SC_DECORATION_OF_MUSIC] = true;
+	status->dbs->DisplayType[SC_LJOSALFAR]           = true;
+	status->dbs->DisplayType[SC_MERMAID_LONGING]     = true;
 
 	if( !battle_config.display_hallucination ) //Disable Hallucination.
-		status->IconChangeTable[SC_ILLUSION] = SI_BLANK;
+		status->dbs->IconChangeTable[SC_ILLUSION] = SI_BLANK;
 #undef add_sc
 #undef set_sc_with_vfx
 }
@@ -1075,7 +1109,6 @@ void initDummyData(void)
 	status->dummy.ele_lv = 1; //Min elemental level.
 	status->dummy.mode = MD_CANMOVE;
 }
-
 
 //For copying a status_data structure from b to a, without overwriting current Hp and Sp
 static inline void status_cpy(struct status_data* a, const struct status_data* b)
@@ -1189,7 +1222,7 @@ int status_damage(struct block_list *src,struct block_list *target,int64 in_hp, 
 			struct status_change_entry *sce;
 
 #ifdef DEVOTION_REFLECT_DAMAGE
-			if(src && (sce = sc->data[SC_DEVOTION])) {
+			if (src && (sce = sc->data[SC_DEVOTION]) != NULL) {
 				struct block_list *d_bl = map->id2bl(sce->val1);
 
 				if(d_bl &&((d_bl->type == BL_MER && ((TBL_MER *)d_bl)->master && ((TBL_MER *)d_bl)->master->bl.id == target->id)
@@ -1585,7 +1618,7 @@ int status_check_skilluse(struct block_list *src, struct block_list *target, uin
 		//on dead characters, said checks are left to skill.c [Skotlex]
 		if (target && status->isdead(target))
 			return 0;
-		if( src && (sc = status->get_sc(src)) && sc->data[SC_COLD] && src->type != BL_MOB)
+		if( src && (sc = status->get_sc(src)) != NULL && sc->data[SC_COLD] && src->type != BL_MOB)
 			return 0;
 	}
 
@@ -1627,7 +1660,7 @@ int status_check_skilluse(struct block_list *src, struct block_list *target, uin
 				break;
 			case AL_TELEPORT:
 				//Should fail when used on top of Land Protector [Skotlex]
-				if (src && map->getcell(src->m, src->x, src->y, CELL_CHKLANDPROTECTOR)
+				if (src && map->getcell(src->m, src, src->x, src->y, CELL_CHKLANDPROTECTOR)
 					&& !(st->mode&MD_BOSS)
 					&& (src->type != BL_PC || ((TBL_PC*)src)->skillitem != skill_id))
 					return 0;
@@ -1872,8 +1905,8 @@ int status_calc_mob_(struct mob_data* md, enum e_status_calc_opt opt) {
 	if (md->special_state.size)
 		flag|=2;
 
-	if( md->guardian_data && md->guardian_data->g
-		&& (guardup_lv = guild->checkskill(md->guardian_data->g,GD_GUARDUP)) )
+	if (md->guardian_data && md->guardian_data->g
+	 && (guardup_lv = guild->checkskill(md->guardian_data->g,GD_GUARDUP)) > 0)
 		flag|=4;
 
 	if (battle_config.slaves_inherit_speed && md->master_id)
@@ -1949,7 +1982,6 @@ int status_calc_mob_(struct mob_data* md, enum e_status_calc_opt opt) {
 		mstatus->speed -= cap_value(diff, 0, mstatus->speed - 10);
 	}
 
-
 	if (flag&2 && battle_config.mob_size_influence) {
 		// change for sized monsters [Valaris]
 		if (md->special_state.size==SZ_MEDIUM) {
@@ -1992,7 +2024,7 @@ int status_calc_mob_(struct mob_data* md, enum e_status_calc_opt opt) {
 		struct guild_castle *gc;
 		gc=guild->mapname2gc(map->list[md->bl.m].name);
 		if (!gc)
-			ShowError("status_calc_mob: No castle set at map %s\n", map->list[md->bl.m].name);
+			ShowError("status_calc_mob: Sem castelo estabelecido no mapa %s\n", map->list[md->bl.m].name);
 		else
 			if(gc->castle_id < 24 || md->class_ == MOBID_EMPERIUM) {
 #ifdef RENEWAL
@@ -2086,44 +2118,73 @@ int status_calc_pet_(struct pet_data *pd, enum e_status_calc_opt opt)
 	return 1;
 }
 
-unsigned int status_get_base_maxsp(struct map_session_data* sd, struct status_data *st) {
-	uint64 val = pc->class2idx(sd->status.class_);
-
-	val = status->SP_table[val][sd->status.base_level];
-
-	if ( sd->class_&JOBL_UPPER )
-		val += val * 25 / 100;
-	else if ( sd->class_&JOBL_BABY )
-		val = val * 70 / 100;
-	if ( (sd->class_&MAPID_UPPERMASK) == MAPID_TAEKWON && sd->status.base_level >= 90 && pc->famerank(sd->status.char_id, MAPID_TAEKWON) )
-		val *= 3; //Triple max SP for top ranking Taekwons over level 90.
-
-	val += val * st->int_ / 100;
-
-	return (unsigned int)cap_value(val, 0, UINT_MAX);
+/// Função auxiliar para status_base_pc_maxhp(), usada para pré-calcular o vetor hp_sigma_val[]
+void status_calc_sigma(void)
+{
+	int i, j;
+	for(i = 0; i < CLASS_COUNT; i++)
+	{
+		unsigned int k = 0;
+		status->dbs->hp_sigma_val[i][0] = status->dbs->hp_sigma_val[i][1] = 0;
+		for(j = 2; j <= MAX_LEVEL; j++)
+		{
+			k += (status->dbs->hp_coefficient[i]*j + 50) / 100;
+			status->dbs->hp_sigma_val[i][j] = k;
+			if (k >= INT_MAX)
+				break; //Overflow protection. [Skotlex]
+		}
+		for(; j <= MAX_LEVEL; j++)
+			status->dbs->hp_sigma_val[i][j] = INT_MAX;
+	}
 }
 
-unsigned int status_get_base_maxhp(struct map_session_data *sd, struct status_data *st) {
+/// Calcula o valor da base MaxHP de acordo com o nível de classe e base
+/// Equação recursiva usada para calcular o nível de bônus(Operações feitas com números inteiros)
+///    f(0) = 35 | f(x+1) = f(x) + A + (x + B)*C/D
+/// Reduz algo próximo de
+///    f(x) = 35 + x*(A + B*C/D) + sum(i=2..x){ i*C/D }
+unsigned int status_base_pc_maxhp(struct map_session_data *sd, struct status_data *st) {
 	uint64 val = pc->class2idx(sd->status.class_);
+	val = 35 + sd->status.base_level*(int64)status->dbs->hp_coefficient2[val]/100 + status->dbs->hp_sigma_val[val][sd->status.base_level];
 
-	val = status->HP_table[val][sd->status.base_level];
+	if((sd->class_&MAPID_UPPERMASK) == MAPID_NINJA || (sd->class_&MAPID_UPPERMASK) == MAPID_GUNSLINGER || (sd->class_&MAPID_UPPERMASK) == MAPID_REBELLION)
+		val += 100; // Você não poderá ter um HP aproximado sem isso
+	if((sd->class_&MAPID_UPPERMASK) == MAPID_TAEKWON && sd->status.base_level >= 90 && pc->famerank(sd->status.char_id, MAPID_TAEKWON))
+		val *= 3; // Triplo de HP máximo para o top ranking de Taekwons acima do nível 90.
+	if((sd->class_&MAPID_UPPERMASK) == MAPID_SUPER_NOVICE && sd->status.base_level >= 99)
+		val += 2000; // Bônus de hp para Supernovice de nível 99.
+	
+	val += val * st->vit/100; // +1% por cada ponto de VIT
+	
+	if (sd->class_&JOBL_UPPER)
+		val += val * 25/100; // Transclasses pega 25% de bônus de hp
+	else if (sd->class_&JOBL_BABY)
+		val -= val * 30/100; // A classe Baby pega uma penalidade de 30% de hp
+	return (unsigned int)cap_value(val,0,UINT_MAX);
+	
+}
 
-	if ( (sd->class_&MAPID_UPPERMASK) == MAPID_SUPER_NOVICE && sd->status.base_level >= 99 )
-		val += 2000; //Supernovice lvl99 hp bonus.
-	if ( (sd->class_&MAPID_THIRDMASK) == MAPID_SUPER_NOVICE_E && sd->status.base_level >= 150 )
-		val += 2000; //Extented Supernovice lvl150 hp bonus.
-
-	if ( sd->class_&JOBL_UPPER )
-		val += val * 25 / 100; //Trans classes get a 25% hp bonus
-	else if ( sd->class_&JOBL_BABY )
-		val = val * 70 / 100; //Baby classes get a 30% hp penalty
-
-	if ( (sd->class_&MAPID_UPPERMASK) == MAPID_TAEKWON && sd->status.base_level >= 90 && pc->famerank(sd->status.char_id, MAPID_TAEKWON) )
-		val *= 3; //Triple max HP for top ranking Taekwons over level 90.
-
-	val += val * st->vit / 100; // +1% per each point of VIT
+unsigned int status_base_pc_maxsp(struct map_session_data* sd, struct status_data *st) {
+	
+	uint64 val;
+	
+	val = 10 + sd->status.base_level*(int64)status->dbs->sp_coefficient[pc->class2idx(sd->status.class_)]/100;
+	val += val * st->int_/100;
+	
+	if (sd->class_&JOBL_UPPER)
+		val += val * 25/100;
+	else if (sd->class_&JOBL_BABY)
+		val -= val * 30/100;
+	if ((sd->class_&MAPID_UPPERMASK) == MAPID_TAEKWON && sd->status.base_level >= 90 && pc->famerank(sd->status.char_id, MAPID_TAEKWON))
+		val *= 3; // Triplo de SP máximo para o top ranking de Taekwons acima do nível 90.
 
 	return (unsigned int)cap_value(val,0,UINT_MAX);
+}
+
+
+void status_calc_pc_additional(struct map_session_data* sd, enum e_status_calc_opt opt) {
+	/* Just used for Plugin to give bonuses. */
+	return;
 }
 
 //Calculates player data from scratch without counting SC adjustments.
@@ -2148,7 +2209,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 
 	pc->calc_skilltree(sd); // SkillTree calculation
 
-	sd->max_weight = status->max_weight_base[pc->class2idx(sd->status.class_)]+sd->status.str*300;
+	sd->max_weight = status->dbs->max_weight_base[pc->class2idx(sd->status.class_)]+sd->status.str*300;
 
 	if(opt&SCO_FIRST) {
 		//Load Hp/SP from char-received data.
@@ -2261,7 +2322,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 
 		if (opt&SCO_FIRST && sd->inventory_data[index]->equip_script) {
 			//Execute equip-script on login
-			script->run(sd->inventory_data[index]->equip_script,0,sd->bl.id,0);
+			script->run_item_equip_script(sd, sd->inventory_data[index], 0);
 			if (!calculating)
 				return 1;
 		}
@@ -2285,27 +2346,27 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 			}
 			wa->atk += sd->inventory_data[index]->atk;
 			if ( (r = sd->status.inventory[index].refine) )
-				wa->atk2 = status->refine_info[wlv].bonus[r-1] / 100;
+				wa->atk2 = status->dbs->refine_info[wlv].bonus[r-1] / 100;
 
 #ifdef RENEWAL
 			wa->matk += sd->inventory_data[index]->matk;
 			wa->wlv = wlv;
 			if( r && sd->weapontype1 != W_BOW ) // renewal magic attack refine bonus
-				wa->matk += status->refine_info[wlv].bonus[r-1] / 100;
+				wa->matk += status->dbs->refine_info[wlv].bonus[r-1] / 100;
 #endif
 
 			//Overrefined bonus.
 			if (r)
-				wd->overrefine = status->refine_info[wlv].randombonus_max[r-1] / 100;
+				wd->overrefine = status->dbs->refine_info[wlv].randombonus_max[r-1] / 100;
 
 			wa->range += sd->inventory_data[index]->range;
 			if(sd->inventory_data[index]->script) {
 				if (wd == &sd->left_weapon) {
 					sd->state.lr_flag = 1;
-					script->run(sd->inventory_data[index]->script,0,sd->bl.id,0);
+					script->run_use_script(sd, sd->inventory_data[index], 0);
 					sd->state.lr_flag = 0;
 				} else
-					script->run(sd->inventory_data[index]->script,0,sd->bl.id,0);
+					script->run_use_script(sd, sd->inventory_data[index], 0);
 				if (!calculating) //Abort, script->run retriggered this. [Skotlex]
 					return 1;
 			}
@@ -2324,11 +2385,11 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 		else if(sd->inventory_data[index]->type == IT_ARMOR) {
 			int r;
 			if ( (r = sd->status.inventory[index].refine) )
-				refinedef += status->refine_info[REFINE_TYPE_ARMOR].bonus[r-1];
+				refinedef += status->dbs->refine_info[REFINE_TYPE_ARMOR].bonus[r-1];
 			if(sd->inventory_data[index]->script) {
 				if( i == EQI_HAND_L ) //Shield
 					sd->state.lr_flag = 3;
-				script->run(sd->inventory_data[index]->script,0,sd->bl.id,0);
+				script->run_use_script(sd, sd->inventory_data[index], 0);
 				if( i == EQI_HAND_L ) //Shield
 					sd->state.lr_flag = 0;
 				if (!calculating) //Abort, script->run retriggered this. [Skotlex]
@@ -2344,7 +2405,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 			sd->bonus.arrow_atk += sd->inventory_data[index]->atk;
 			sd->state.lr_flag = 2;
 			if( !itemdb_is_GNthrowable(sd->inventory_data[index]->nameid) ) //don't run scripts on throwable items
-				script->run(sd->inventory_data[index]->script,0,sd->bl.id,0);
+				script->run_use_script(sd, sd->inventory_data[index], 0);
 			sd->state.lr_flag = 0;
 			if (!calculating) //Abort, script->run retriggered status_calc_pc. [Skotlex]
 				return 1;
@@ -2422,7 +2483,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 					continue;
 
 				if(opt&SCO_FIRST && data->equip_script) {//Execute equip-script on login
-					script->run(data->equip_script,0,sd->bl.id,0);
+					script->run_item_equip_script(sd, data, 0);
 					if (!calculating)
 						return 1;
 				}
@@ -2432,10 +2493,10 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 
 				if(i == EQI_HAND_L && sd->status.inventory[index].equip == EQP_HAND_L) { //Left hand status.
 					sd->state.lr_flag = 1;
-					script->run(data->script,0,sd->bl.id,0);
+					script->run_use_script(sd, data, 0);
 					sd->state.lr_flag = 0;
 				} else
-					script->run(data->script,0,sd->bl.id,0);
+					script->run_use_script(sd, data, 0);
 				if (!calculating) //Abort, script->run his function. [Skotlex]
 					return 1;
 			}
@@ -2445,8 +2506,10 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	if( sc->count && sc->data[SC_ITEMSCRIPT] ) {
 		struct item_data *data = itemdb->exists(sc->data[SC_ITEMSCRIPT]->val1);
 		if( data && data->script )
-			script->run(data->script,0,sd->bl.id,0);
+			script->run_use_script(sd, data, 0);
 	}
+
+	status->calc_pc_additional(sd, opt);
 
 	if( sd->pd ) { // Pet Bonus
 		struct pet_data *pd = sd->pd;
@@ -2467,12 +2530,12 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	sd->bonus.splash_range += sd->bonus.splash_add_range;
 
 	// Damage modifiers from weapon type
-	sd->right_weapon.atkmods[0] = status->atkmods[0][sd->weapontype1];
-	sd->right_weapon.atkmods[1] = status->atkmods[1][sd->weapontype1];
-	sd->right_weapon.atkmods[2] = status->atkmods[2][sd->weapontype1];
-	sd->left_weapon.atkmods[0] = status->atkmods[0][sd->weapontype2];
-	sd->left_weapon.atkmods[1] = status->atkmods[1][sd->weapontype2];
-	sd->left_weapon.atkmods[2] = status->atkmods[2][sd->weapontype2];
+	sd->right_weapon.atkmods[0] = status->dbs->atkmods[0][sd->weapontype1];
+	sd->right_weapon.atkmods[1] = status->dbs->atkmods[1][sd->weapontype1];
+	sd->right_weapon.atkmods[2] = status->dbs->atkmods[2][sd->weapontype1];
+	sd->left_weapon.atkmods[0] = status->dbs->atkmods[0][sd->weapontype2];
+	sd->left_weapon.atkmods[1] = status->dbs->atkmods[1][sd->weapontype2];
+	sd->left_weapon.atkmods[2] = status->dbs->atkmods[2][sd->weapontype2];
 
 	if ((pc_isridingpeco(sd) || pc_isridingdragon(sd))
 	    && (sd->status.weapon==W_1HSPEAR || sd->status.weapon==W_2HSPEAR)
@@ -2488,9 +2551,9 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	// Job bonuses
 	index = pc->class2idx(sd->status.class_);
 	for(i=0;i<(int)sd->status.job_level && i<MAX_LEVEL;i++){
-		if(!status->job_bonus[index][i])
+		if(!status->dbs->job_bonus[index][i])
 			continue;
-		switch(status->job_bonus[index][i]) {
+		switch(status->dbs->job_bonus[index][i]) {
 			case 1: bstatus->str++; break;
 			case 2: bstatus->agi++; break;
 			case 3: bstatus->vit++; break;
@@ -2550,7 +2613,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 
 	// Basic MaxHP value
 	//We hold the standard Max HP here to make it faster to recalculate on vit changes.
-	sd->status.max_hp = status->get_base_maxhp(sd,bstatus);
+	sd->status.max_hp = status->base_pc_maxhp(sd,bstatus);
 	//This is done to handle underflows from negative Max HP bonuses
 	i64 = sd->status.max_hp + (int)bstatus->max_hp;
 	bstatus->max_hp = (unsigned int)cap_value(i64, 0, INT_MAX);
@@ -2575,7 +2638,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	// ----- SP MAX CALCULATION -----
 
 	// Basic MaxSP value
-	sd->status.max_sp = status->get_base_maxsp(sd,bstatus);
+	sd->status.max_sp = status->base_pc_maxsp(sd,bstatus);
 	//This is done to handle underflows from negative Max SP bonuses
 	i64 = sd->status.max_sp + (int)bstatus->max_sp;
 	bstatus->max_sp = (unsigned int)cap_value(i64, 0, INT_MAX);
@@ -2591,7 +2654,6 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 		bstatus->max_sp += 200 + 20 * skill_lv;
 	if( (skill_lv = pc->checkskill(sd,WM_LESSON)) > 0 )
 		bstatus->max_sp += 30 * skill_lv;
-
 
 	// Apply relative modifiers from equipment
 	if(sd->sprate < 0)
@@ -2694,7 +2756,7 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	}
 	if( (sd->status.weapon == W_1HAXE || sd->status.weapon == W_2HAXE) && (skill_lv = pc->checkskill(sd,NC_TRAININGAXE)) > 0 )
 		bstatus->hit += 3*skill_lv;
-	if((sd->status.weapon == W_MACE || sd->status.weapon == W_2HMACE) && ((skill_lv = pc->checkskill(sd,NC_TRAININGAXE)) > 0))
+	if((sd->status.weapon == W_MACE || sd->status.weapon == W_2HMACE) && (skill_lv = pc->checkskill(sd,NC_TRAININGAXE)) > 0)
 		bstatus->hit += 2*skill_lv;
 
 	// ----- FLEE CALCULATION -----
@@ -2762,15 +2824,19 @@ int status_calc_pc_(struct map_session_data* sd, enum e_status_calc_opt opt) {
 	else if (pc_isridingdragon(sd))
 		bstatus->aspd_rate += 250-50*pc->checkskill(sd,RK_DRAGONTRAINING);
 #else // needs more info
-	if ( (skill_lv = pc->checkskill(sd, SG_DEVIL)) > 0 && !pc->nextjobexp(sd) )
-		bstatus->aspd_rate += 30 * skill_lv;
-	if ( pc_isridingpeco(sd) )
-		bstatus->aspd_rate -= 500 - 100 * pc->checkskill(sd, KN_CAVALIERMASTERY);
-	else if ( pc_isridingdragon(sd) )
-		bstatus->aspd_rate -= 250 - 50 * pc->checkskill(sd, RK_DRAGONTRAINING);
+	if((skill_lv=pc->checkskill(sd,SA_ADVANCEDBOOK))>0 && sd->status.weapon == W_BOOK)
+		bstatus->aspd_rate += 5*skill_lv;
+	if((skill_lv = pc->checkskill(sd,SG_DEVIL)) > 0 && !pc->nextjobexp(sd))
+		bstatus->aspd_rate += 30*skill_lv;
+	if((skill_lv=pc->checkskill(sd,GS_SINGLEACTION))>0 &&
+		(sd->status.weapon >= W_REVOLVER && sd->status.weapon <= W_GRENADE))
+		bstatus->aspd_rate += ((skill_lv+1)/2) * 10;
+	if (pc_isridingpeco(sd))
+		bstatus->aspd_rate -= 500-100*pc->checkskill(sd,KN_CAVALIERMASTERY);
+	else if (pc_isridingdragon(sd))
+		bstatus->aspd_rate -= 250-50*pc->checkskill(sd,RK_DRAGONTRAINING);
 #endif
 	bstatus->adelay = 2*bstatus->amotion;
-
 
 	// ----- DMOTION -----
 	//
@@ -3529,12 +3595,6 @@ void status_calc_bl_main(struct block_list *bl, /*enum scb_flag*/int flag) {
 			st->cri = status->calc_critical(bl, sc, bst->cri, true);
 		else
 			st->cri = status->calc_critical(bl, sc, bst->cri + 3*(st->luk - bst->luk), true);
-		/**
-		* after status_calc_critical so the bonus is applied despite if you have or not a sc bugreport:5240
-		**/
-		if( bl->type == BL_PC && ((TBL_PC*)bl)->status.weapon == W_KATAR )
-			st->cri <<= 1;
-
 	}
 
 	if(flag&SCB_FLEE2 && bst->flee2) {
@@ -3572,7 +3632,7 @@ void status_calc_bl_main(struct block_list *bl, /*enum scb_flag*/int flag) {
 
 	if(flag&SCB_MAXHP) {
 		if( bl->type&BL_PC ) {
-			st->max_hp = status->get_base_maxhp(sd,st);
+			st->max_hp = status->base_pc_maxhp(sd,st);
 			if (sd)
 				st->max_hp += bst->max_hp - sd->status.max_hp;
 
@@ -3593,7 +3653,7 @@ void status_calc_bl_main(struct block_list *bl, /*enum scb_flag*/int flag) {
 
 	if(flag&SCB_MAXSP) {
 		if( bl->type&BL_PC ) {
-			st->max_sp = status->get_base_maxsp(sd,st);
+			st->max_sp = status->base_pc_maxsp(sd,st);
 			if (sd)
 				st->max_sp += bst->max_sp - sd->status.max_sp;
 
@@ -3660,14 +3720,19 @@ void status_calc_bl_main(struct block_list *bl, /*enum scb_flag*/int flag) {
 			amotion = status->base_amotion_pc(sd, st);
 #ifndef RENEWAL_ASPD
 			st->aspd_rate = status->calc_aspd_rate(bl, sc, bst->aspd_rate);
-#endif
+			
+			if(st->aspd_rate != 1000)
+				amotion = amotion*st->aspd_rate/1000;
+#else
+			// aspd = baseaspd + floor(sqrt((agi^2/2) + (dex^2/5))/4 + (potskillbonus*agi/200))
+			amotion -= (int)(sqrt((pow(st->agi, 2) / 2) + (pow(st->dex, 2) / 5)) / 4 + ((float)status->calc_aspd(bl, sc, 1) * st->agi / 200)) * 10;
+
+			if ( (status->calc_aspd(bl, sc, 2) + st->aspd_rate2) != 0 ) // RE ASPD percertage modifier
+				amotion -= ((amotion - ((sd->class_&JOBL_THIRD) ? battle_config.max_third_aspd : battle_config.max_aspd))
+				* (status->calc_aspd(bl, sc, 2) + st->aspd_rate2) / 10 + 5) / 10;
+				
 			if ( st->aspd_rate != 1000 ) // absolute percentage modifier
-				amotion = amotion * st->aspd_rate / 1000;
-			if ( sd && sd->ud.skilltimer != INVALID_TIMER && pc->checkskill(sd, SA_FREECAST) > 0 )
-				amotion = amotion * 5 * (pc->checkskill(sd, SA_FREECAST) + 10) / 100;
-#ifdef RENEWAL_ASPD
-			amotion += (max(0xc3 - amotion, 2) * (st->aspd_rate2 + status->calc_aspd(bl, sc, 2))) / 100;
-			amotion = 10 * (200 - amotion) + sd->bonus.aspd_add;
+				amotion = (200 - (200 - amotion / 10) * st->aspd_rate / 1000) * 10;
 #endif
 			amotion = status->calc_fix_aspd(bl, sc, amotion);
 			st->amotion = cap_value(amotion, ((sd->class_&JOBL_THIRD) ? battle_config.max_third_aspd : battle_config.max_aspd), 2000);
@@ -3921,39 +3986,44 @@ int status_check_visibility(struct block_list *src, struct block_list *target) {
 
 // Basic ASPD value
 int status_base_amotion_pc(struct map_session_data *sd, struct status_data *st) {
+	
 	int amotion;
-#ifdef RENEWAL_ASPD /* [malufett/Hercules] */
-	float temp;
-	int skill_lv, val = 0;
-	amotion = status->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype1];
-	if ( sd->status.weapon > MAX_WEAPON_TYPE )
-		amotion += status->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2] / 4;
-	if ( sd->status.shield )
-		amotion += status->aspd_base[pc->class2idx(sd->status.class_)][MAX_WEAPON_TYPE];
-	switch ( sd->status.weapon ) {
-		case W_BOW:		case W_MUSICAL:
-		case W_WHIP:	case W_REVOLVER:
-		case W_RIFLE:	case W_GATLING:
-		case W_SHOTGUN:	case W_GRENADE:
-			temp = st->dex * st->dex / 7.0f + st->agi * st->agi * 0.5f;
-			break;
-		default:
-			temp = st->dex * st->dex / 5.0f + st->agi * st->agi * 0.5f;
+	
+#ifdef RENEWAL_ASPD
+	short mod = -1;
+
+	switch ( sd->weapontype2 ) { // adjustment for dual wielding
+	case W_DAGGER:
+		mod = 0;
+		break; // 0, 1, 1
+	case W_1HSWORD:
+	case W_1HAXE:
+		mod = 1;
+		if ( (sd->class_&MAPID_THIRDMASK) == MAPID_GUILLOTINE_CROSS ) // 0, 2, 3
+			mod = sd->weapontype2 / W_1HSWORD + W_1HSWORD / sd->weapontype2;
 	}
-	temp = (float)(sqrt(temp) * 0.25f) + 0xc4;
-	if ( (skill_lv = pc->checkskill(sd, SA_ADVANCEDBOOK)) > 0 && sd->status.weapon == W_BOOK )
-		val += (skill_lv - 1) / 2 + 1;
-	if ( (skill_lv = pc->checkskill(sd, GS_SINGLEACTION)) > 0 )
-		val += ((skill_lv + 1) / 2);
-	amotion = ((int)(temp + ((float)(status->calc_aspd(&sd->bl, &sd->sc, 1) + val) * st->agi / 200)) - min(amotion, 200));
+
+	amotion = (sd->status.weapon < MAX_WEAPON_TYPE && mod < 0)
+		? (status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->status.weapon]) // single weapon
+		: ((status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2] // dual-wield
+		+ status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2]) * 6 / 10 + 10 * mod
+		- status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2]
+		+ status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype1]);
+	
+	if ( sd->status.shield )
+		amotion += (2000 - status->dbs->aspd_base[pc->class2idx(sd->status.class_)][W_FIST]) +
+ 		(status->dbs->aspd_base[pc->class2idx(sd->status.class_)][MAX_WEAPON_TYPE] - 2000);
 #else
+	
 	// base weapon delay
 	amotion = (sd->status.weapon < MAX_WEAPON_TYPE)
-		? (status->aspd_base[pc->class2idx(sd->status.class_)][sd->status.weapon]) // single weapon
-		: (status->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype1] + status->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2]) * 7 / 10; // dual-wield
+		? (status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->status.weapon]) // single weapon
+		: (status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype1] + status->dbs->aspd_base[pc->class2idx(sd->status.class_)][sd->weapontype2]) * 7 / 10; // dual-wield
 
 	// percentual delay reduction from stats
 	amotion -= amotion * (4 * st->agi + st->dex) / 1000;
+
+#endif
 
 	// raw delay adjustment from bAspd bonus
 	amotion += sd->bonus.aspd_add;
@@ -3961,7 +4031,6 @@ int status_base_amotion_pc(struct map_session_data *sd, struct status_data *st) 
 	/* angra manyu disregards aspd_base and similar */
 	if ( sd->equip_index[EQI_HAND_R] >= 0 && sd->status.inventory[sd->equip_index[EQI_HAND_R]].nameid == ITEMID_ANGRA_MANYU )
 		return 0;
-#endif
 
 	return amotion;
 }
@@ -5076,7 +5145,6 @@ signed short status_calc_def2(struct block_list *bl, struct status_change *sc, i
 #endif
 }
 
-
 defType status_calc_mdef(struct block_list *bl, struct status_change *sc, int mdef, bool viewable) {
 
 	if(!sc || !sc->count)
@@ -5790,7 +5858,6 @@ unsigned char status_calc_element_lv(struct block_list *bl, struct status_change
 	return (unsigned char)cap_value(lv,1,4);
 }
 
-
 unsigned char status_calc_attack_element(struct block_list *bl, struct status_change *sc, int element)
 {
 	if(!sc || !sc->count)
@@ -6198,7 +6265,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			} else if (vd)
 				memcpy(&sd->vd, vd, sizeof(struct view_data));
 			else
-				ShowError("status_set_viewdata (PC): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (PC): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	case BL_MOB:
@@ -6207,7 +6274,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			if (vd)
 				md->vd = vd;
 			else
-				ShowError("status_set_viewdata (MOB): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (MOB): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	case BL_PET:
@@ -6224,7 +6291,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 					}
 				}
 			} else
-				ShowError("status_set_viewdata (PET): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (PET): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	case BL_NPC:
@@ -6233,7 +6300,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			if (vd)
 				nd->vd = vd;
 			else
-				ShowError("status_set_viewdata (NPC): No view data for class %d (name=%s)\n", class_, nd->name);
+				ShowError("status_set_viewdata (NPC): Sem visualizacao de dados para a classe %d (nome=%s)\n", class_, nd->name);
 		}
 		break;
 	case BL_HOM: //[blackhole89]
@@ -6242,7 +6309,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			if (vd)
 				hd->vd = vd;
 			else
-				ShowError("status_set_viewdata (HOMUNCULUS): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (HOMUNCULUS): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	case BL_MER:
@@ -6251,7 +6318,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			if (vd)
 				md->vd = vd;
 			else
-				ShowError("status_set_viewdata (MERCENARY): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (MERCENARY): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	case BL_ELEM:
@@ -6260,7 +6327,7 @@ void status_set_viewdata(struct block_list *bl, int class_)
 			if (vd)
 				ed->vd = vd;
 			else
-				ShowError("status_set_viewdata (ELEMENTAL): No view data for class %d\n", class_);
+				ShowError("status_set_viewdata (ELEMENTAL): Sem visualizacao de dados para a classe %d\n", class_);
 		}
 		break;
 	}
@@ -6737,7 +6804,7 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 	st = status->get_status_data(bl);
 
 	if( type <= SC_NONE || type >= SC_MAX ) {
-		ShowError("status_change_start: invalid status change (%d)!\n", type);
+		ShowError("status_change_start: Mudanca de status invalida (%d)!\n", type);
 		return 0;
 	}
 
@@ -7525,7 +7592,7 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 	}
 
 	vd = status->get_viewdata(bl);
-	calc_flag = status->ChangeFlagTable[type];
+	calc_flag = status->dbs->ChangeFlagTable[type];
 	if(!(flag&SCFLAG_LOADED)) { // Do not parse val settings when loading SCs
 		switch(type) {
 			case SC_ADORAMUS:
@@ -7542,11 +7609,12 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 					if( sd ) {
 						int i;
 						for( i = 0; i < MAX_PC_DEVOTION; i++ ) {
-							if( sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) )
+							if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) != NULL)
 								status->change_start(bl, &tsd->bl, type, 10000, val1, val2, val3, val4, tick, SCFLAG_ALL);
 						}
-					} else if( bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) )
+					} else if (bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) != NULL) {
 						status->change_start(bl, &tsd->bl, type, 10000, val1, val2, val3, val4, tick, SCFLAG_ALL);
+					}
 				}
 				//val4 signals infinite endure (if val4 == 2 it is infinite endure from Berserk)
 				if( val4 )
@@ -7641,11 +7709,12 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 					if( sd ) {
 						int i;
 						for( i = 0; i < MAX_PC_DEVOTION; i++ ) {
-							if( sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) )
+							if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) != NULL)
 								status->change_start(bl, &tsd->bl, type, 10000, val1, val2, 0, 0, tick, SCFLAG_ALL);
 						}
-					} else if( bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) )
+					} else if (bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) != NULL) {
 						status->change_start(bl, &tsd->bl, type, 10000, val1, val2, 0, 0, tick, SCFLAG_ALL);
+					}
 				}
 				break;
 			case SC_NOEQUIPWEAPON:
@@ -7899,12 +7968,13 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 					if( bl->type&(BL_PC|BL_MER) ) {
 						if( sd ) {
 							for( i = 0; i < MAX_PC_DEVOTION; i++ ) {
-								if( sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) )
+								if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) != NULL)
 									status->change_start(bl, &tsd->bl, type, 10000, val1, val2, 0, 0, tick, SCFLAG_ALL);
 							}
 						}
-						else if( bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) )
+						else if (bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag && (tsd = ((TBL_MER*)bl)->master) != NULL) {
 							status->change_start(bl, &tsd->bl, type, 10000, val1, val2, 0, 0, tick, SCFLAG_ALL);
+						}
 					}
 				}
 				break;
@@ -7920,7 +7990,7 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 						int i;
 						for (i = 0; i < MAX_PC_DEVOTION; i++) {
 							//See if there are devoted characters, and pass the status to them. [Skotlex]
-							if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])))
+							if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) != NULL)
 								status->change_start(bl, &tsd->bl,type,10000,val1,5+val1*5,val3,val4,tick,SCFLAG_NOAVOID);
 						}
 					}
@@ -8057,7 +8127,7 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 				struct block_list *d_bl;
 				struct status_change *d_sc;
 
-				if ((d_bl = map->id2bl(val1)) && (d_sc = status->get_sc(d_bl)) && d_sc->count) {
+				if ((d_bl = map->id2bl(val1)) && (d_sc = status->get_sc(d_bl)) != NULL && d_sc->count) {
 					// Inherits Status From Source
 					const enum sc_type types[] = { SC_AUTOGUARD, SC_DEFENDER, SC_REFLECTSHIELD, SC_ENDURE };
 					int i = (map_flag_gvg(bl->m) || map->list[bl->m].flag.battleground)?2:3;
@@ -8959,6 +9029,9 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 			{
 				int hp = status_get_hp(bl), sp = status_get_sp(bl), lv = 5;
 
+				if (sp < 1) sp = 1;
+				if (hp < 1) hp = 1;
+
 				if( rnd()%100 > (25 + 10 * val1) - status_get_int(bl) / 2)
 					return 0;
 
@@ -9056,9 +9129,9 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 				val2 = 20+(20*val1);
 				break;
 			default:
-				if (calc_flag == SCB_NONE && status->SkillChangeTable[type] == 0 && status->IconChangeTable[type] == 0) {
+				if (calc_flag == SCB_NONE && status->dbs->SkillChangeTable[type] == 0 && status->dbs->IconChangeTable[type] == 0) {
 					//Status change with no calc, no icon, and no skill associated...?
-					ShowError("UnknownStatusChange [%d]\n", type);
+					ShowError("Mudanca de Status desconhecida [%d]\n", type);
 					return 0;
 				}
 		}
@@ -9210,7 +9283,7 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 	}
 
 	/* [Ind/Hercules] */
-	if( sd && status->DisplayType[type] ) {
+	if( sd && status->dbs->DisplayType[type] ) {
 		int dval1 = 0, dval2 = 0, dval3 = 0;
 		switch( type ) {
 			case SC_ALL_RIDING:
@@ -9503,8 +9576,8 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 		calc_flag&=~SCB_DYE;
 	}
 
-	if(!(flag&SCFLAG_NOICON) && !(flag&SCFLAG_LOADED && status->DisplayType[type]))
-		clif->status_change(bl,status->IconChangeTable[type],1,tick,(val_flag&1)?val1:1,(val_flag&2)?val2:0,(val_flag&4)?val3:0);
+	if(!(flag&SCFLAG_NOICON) && !(flag&SCFLAG_LOADED && status->dbs->DisplayType[type]))
+		clif->status_change(bl,status->dbs->IconChangeTable[type],1,tick,(val_flag&1)?val1:1,(val_flag&2)?val2:0,(val_flag&4)?val3:0);
 
 	/**
 	* used as temporary storage for scs with interval ticks, so that the actual duration is sent to the client first.
@@ -9520,12 +9593,12 @@ int status_change_start(struct block_list *src, struct block_list *bl, enum sc_t
 		++(sc->count);
 		sce = sc->data[type] = ers_alloc(status->data_ers, struct status_change_entry);
 	}
-	
+
 	sce->val1 = val1;
 	sce->val2 = val2;
 	sce->val3 = val3;
 	sce->val4 = val4;
-	
+
 	if (tick >= 0) {
 		sce->timer = timer->add(timer->gettick() + tick, status->change_timer, bl->id, type);
 		sce->infinite_duration = false;
@@ -9716,7 +9789,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 		return 0;
 
 	st = status->get_status_data(bl);
-	
+
 	if( sd && sce->infinite_duration && !sd->state.loggingout )
 		chrif->del_scdata_single(sd->status.account_id,sd->status.char_id,type);
 
@@ -9751,7 +9824,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 
 	sc->data[type] = NULL;
 
-	if( sd && status->DisplayType[type] ) {
+	if( sd && status->dbs->DisplayType[type] ) {
 		status->display_remove(sd,type);
 	}
 
@@ -9761,7 +9834,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 #endif
 
 	vd = status->get_viewdata(bl);
-	calc_flag = status->ChangeFlagTable[type];
+	calc_flag = status->dbs->ChangeFlagTable[type];
 	switch(type) {
 		case SC_GRANITIC_ARMOR:
 		{
@@ -9812,7 +9885,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 					// Clear Status from others
 					int i;
 					for( i = 0; i < MAX_PC_DEVOTION; i++ ) {
-						if( sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) && tsd->sc.data[type] )
+						if (sd->devotion[i] && (tsd = map->id2sd(sd->devotion[i])) != NULL && tsd->sc.data[type])
 							status_change_end(&tsd->bl, type, INVALID_TIMER);
 					}
 				} else if( bl->type == BL_MER && ((TBL_MER*)bl)->devotion_flag ) {
@@ -9873,7 +9946,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 					sd->delunit_prevline = line;
 				}
 
-				if (sce->val4 && sce->val4 != BCT_SELF && (dsd=map->id2sd(sce->val4))) {
+				if (sce->val4 && sce->val4 != BCT_SELF && (dsd=map->id2sd(sce->val4)) != NULL) {
 					// end status on partner as well
 					dsc = dsd->sc.data[SC_DANCING];
 					if (dsc) {
@@ -9889,7 +9962,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 					struct skill_unit_group *group = skill->id2group(sce->val2);
 
 					if (group == NULL) {
-						ShowDebug("status_change_end: SC_DANCING is missing skill unit group (val1=%d, val2=%d, val3=%d, val4=%d, timer=%d, tid=%d, char_id=%d, map=%s, x=%d, y=%d, prev=%s:%d, from=%s:%d). Please report this! (#3504)\n",
+						ShowDebug("status_change_end: SC_DANCING esta faltando grupo de unidade de habilidade (val1=%d, val2=%d, val3=%d, val4=%d, timer=%d, tid=%d, char_id=%d, map=%s, x=%d, y=%d, prev=%s:%d, from=%s:%d). Favor reportar isso! (#3504)\n",
 							sce->val1, sce->val2, sce->val3, sce->val4, sce->timer, tid,
 							sd ? sd->status.char_id : 0,
 							mapindex_id2name(map_id2index(bl->m)), bl->x, bl->y,
@@ -9898,7 +9971,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 					}
 
 					sce->val2 = 0;
-					
+
 					if( group )
 						skill->del_unitgroup(group,ALC_MARK);
 				}
@@ -10062,7 +10135,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 				struct block_list *tbl = map->id2bl(sce->val2);
 				struct status_change *tsc = NULL;
 				sce->val2 = 0;
-				if( tbl && (tsc = status->get_sc(tbl)) && tsc->data[SC_STOP] && tsc->data[SC_STOP]->val2 == bl->id )
+				if (tbl && (tsc = status->get_sc(tbl)) != NULL && tsc->data[SC_STOP] && tsc->data[SC_STOP]->val2 == bl->id)
 					status_change_end(tbl, SC_STOP, INVALID_TIMER);
 			}
 			break;
@@ -10405,7 +10478,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 	}
 
 	//On Aegis, when turning off a status change, first goes the sc packet, then the option packet.
-	clif->sc_end(bl,bl->id,AREA,status->IconChangeTable[type]);
+	clif->sc_end(bl,bl->id,AREA,status->dbs->IconChangeTable[type]);
 
 	if( opt_flag&8 ) //bugreport:681
 		clif->changeoption2(bl);
@@ -10427,7 +10500,7 @@ int status_change_end_(struct block_list* bl, enum sc_type type, int tid, const 
 		skill->unit_move(bl,timer->gettick(),1);
 
 	if (opt_flag & 2 && sd) {
-		if (map->getcell(bl->m,bl->x,bl->y,CELL_CHKNPC))
+		if (map->getcell(bl->m, bl, bl->x, bl->y, CELL_CHKNPC))
 			npc->touch_areanpc(sd,bl->m,bl->x,bl->y); //Trigger on-touch event.
 		else
 			npc->untouch_areanpc(sd, bl->m, bl->x, bl->y);
@@ -10444,14 +10517,11 @@ int kaahi_heal_timer(int tid, int64 tick, int id, intptr_t data) {
 	struct status_data *st;
 	int hp;
 
-	if(!( (bl=map->id2bl(id))
-	   && (sc=status->get_sc(bl))
-	   && (sce=sc->data[SC_KAAHI])
-	))
+	if ((bl=map->id2bl(id)) == NULL || (sc=status->get_sc(bl)) == NULL || (sce=sc->data[SC_KAAHI]) == NULL)
 		return 0;
 
 	if(sce->val4 != tid) {
-		ShowError("kaahi_heal_timer: Timer mismatch: %d != %d\n", tid, sce->val4);
+		ShowError("kaahi_heal_timer: Incompatibilidade de Timer: %d != %d\n", tid, sce->val4);
 		sce->val4 = INVALID_TIMER;
 		return 0;
 	}
@@ -10485,22 +10555,22 @@ int status_change_timer(int tid, int64 tick, int id, intptr_t data) {
 
 	bl = map->id2bl(id);
 	if (!bl) {
-		ShowDebug("status_change_timer: Null pointer id: %d data: %"PRIdPTR"\n", id, data);
+		ShowDebug("status_change_timer: Id de ponteiro nulo: %d dados: %"PRIdPTR"\n", id, data);
 		return 0;
 	}
 	sc = status->get_sc(bl);
 	st = status->get_status_data(bl);
 
-	if (!(sc && (sce = sc->data[type]))) {
-		ShowDebug("status_change_timer: Null pointer id: %d data: %"PRIdPTR" bl-type: %d\n", id, data, bl->type);
+	if (!sc || (sce = sc->data[type]) == NULL) {
+		ShowDebug("status_change_timer: Id de ponteiro nulo: %d dados: %"PRIdPTR" bl-type: %d\n", id, data, bl->type);
 		return 0;
 	}
 
 	if (sce->timer != tid) {
-		ShowError("status_change_timer: Mismatch for type %d: %d != %d (bl id %d)\n",type,tid,sce->timer, bl->id);
+		ShowError("status_change_timer: Incompatibilidade para o tipo %d: %d != %d (bl id %d)\n",type,tid,sce->timer, bl->id);
 		return 0;
 	}
-	
+
 	sce->timer = INVALID_TIMER;
 
 	sd = BL_CAST(BL_PC, bl);
@@ -10584,7 +10654,7 @@ int status_change_timer(int tid, int64 tick, int id, intptr_t data) {
 				sc->opt1 = OPT1_STONE;
 				clif->changeoption(bl);
 				sc_timer_next(1000+tick, status->change_timer, bl->id, data );
-				status_calc_bl(bl, status->ChangeFlagTable[type]);
+				status_calc_bl(bl, status->dbs->ChangeFlagTable[type]);
 				return 0;
 			}
 			if(--(sce->val3) > 0) {
@@ -10870,7 +10940,7 @@ int status_change_timer(int tid, int64 tick, int id, intptr_t data) {
 						unit->skillcastcancel(bl,0);
 						do {
 							int i = rnd() % MAX_SKILL_MAGICMUSHROOM_DB;
-							mushroom_skill_id = skill->magicmushroom_db[i].skill_id;
+							mushroom_skill_id = skill->dbs->magicmushroom_db[i].skill_id;
 						} while (mushroom_skill_id == 0);
 
 						switch( skill->get_casttype(mushroom_skill_id) ) { // Magic Mushroom skills are buffs or area damage
@@ -10938,15 +11008,14 @@ int status_change_timer(int tid, int64 tick, int id, intptr_t data) {
 				int heal = st->max_hp * 3 / 100;
 				if (sc->count && sc->data[SC_AKAITSUKI] && heal)
 					heal = ~heal + 1;
-				
+
 				map->freeblock_lock();
-				
 				status->heal(bl, heal, 0, 2);
 				if( sc->data[type] ) {
 					sc_timer_next(5000 + tick, status->change_timer, bl->id, data);
 				}
 				map->freeblock_unlock();
-				
+
 				return 0;
 			}
 			break;
@@ -11104,7 +11173,6 @@ int status_change_timer(int tid, int64 tick, int id, intptr_t data) {
 				return 0;
 			}
 			break;
-
 
 		case SC_SATURDAY_NIGHT_FEVER:
 			if( --(sce->val3) >= 0 ) {
@@ -11449,7 +11517,7 @@ int status_get_weapon_atk(struct block_list *bl, struct weapon_atk *watk, int fl
 		short index = sd->equip_index[EQI_HAND_R], refine;
 		if ( index >= 0 && sd->inventory_data[index] && sd->inventory_data[index]->type == IT_WEAPON
 			&& (refine = sd->status.inventory[index].refine) < 16 && refine ) {
-			int r = status->refine_info[watk->wlv].randombonus_max[refine + (4 - watk->wlv)] / 100;
+			int r = status->dbs->refine_info[watk->wlv].randombonus_max[refine + (4 - watk->wlv)] / 100;
 			if ( r )
 				max += (rnd() % 100) % r + 1;
 		}
@@ -11482,7 +11550,7 @@ void status_get_matk_sub(struct block_list *bl, int flag, unsigned short *matk_m
 		return;
 
 	if ( flag != 0 && flag != 1 && flag != 3 ) {
-		ShowError("status_get_matk_sub: Unknown flag %d!\n", flag);
+		ShowError("status_get_matk_sub: Flag %d desconhecida!\n", flag);
 		return;
 	}
 
@@ -11548,7 +11616,7 @@ void status_get_matk_sub(struct block_list *bl, int flag, unsigned short *matk_m
 		short index = sd->equip_index[EQI_HAND_R], refine;
 		if ( index >= 0 && sd->inventory_data[index] && sd->inventory_data[index]->type == IT_WEAPON
 			&& (refine = sd->status.inventory[index].refine) < 16 && refine ) {
-			int r =  status->refine_info[sd->inventory_data[index]->wlv].randombonus_max[refine + (4 - sd->inventory_data[index]->wlv)] / 100;
+			int r =  status->dbs->refine_info[sd->inventory_data[index]->wlv].randombonus_max[refine + (4 - sd->inventory_data[index]->wlv)] / 100;
 			if ( r )
 				*matk_max += (rnd() % 100) % r + 1;
 		}
@@ -11590,7 +11658,7 @@ int status_get_matk(struct block_list *bl, int flag) {
 		return 1;
 
 	if ( flag < 1 || flag > 3 ) {
-		ShowError("status_get_matk: Unknown flag %d!\n", flag);
+		ShowError("status_get_matk: Flag %d desconhecida!\n", flag);
 		return 1;
 	}
 
@@ -11646,7 +11714,7 @@ int status_change_clear_buffs (struct block_list* bl, int type) {
 		return 0;
 
 	map->freeblock_lock();
-	
+
 	if (type&6) //Debuffs
 		for (i = SC_COMMON_MIN; i <= SC_COMMON_MAX; i++)
 			status_change_end(bl, (sc_type)i, INVALID_TIMER);
@@ -11693,9 +11761,9 @@ int status_change_clear_buffs (struct block_list* bl, int type) {
 		}
 		status_change_end(bl, (sc_type)i, INVALID_TIMER);
 	}
-	
+
 	map->freeblock_unlock();
-	
+
 	return 0;
 }
 
@@ -11828,7 +11896,7 @@ int status_natural_heal(struct block_list* bl, va_list args) {
 
 	if (flag&(RGN_SHP|RGN_SSP)
 	 && regen->ssregen
-	 && (vd = status->get_viewdata(bl))
+	 && (vd = status->get_viewdata(bl)) != NULL
 	 && vd->dead_sit == 2
 	) {
 		//Apply sitting regen bonus.
@@ -11991,7 +12059,7 @@ int status_get_refine_chance(enum refine_type wlv, int refine) {
 	if ( refine < 0 || refine >= MAX_REFINE)
 	return 0;
 
-	return status->refine_info[wlv].chance[refine];
+	return status->dbs->refine_info[wlv].chance[refine];
 }
 
 int status_get_sc_type(sc_type type) {
@@ -11999,206 +12067,47 @@ int status_get_sc_type(sc_type type) {
 	if( type <= SC_NONE || type >= SC_MAX )
 		return 0;
 
-	return status->sc_conf[type];
-}
-
-void status_read_job_db_sub(int idx, const char *name, config_setting_t *jdb)
-{
-	config_setting_t *temp = NULL;
-	int i32 = 0;
-
-	struct {
-		const char *name;
-		int id;
-	} wnames[] = {
-		{ "Fist", W_FIST },
-		{ "Dagger", W_DAGGER },
-		{ "Sword", W_1HSWORD },
-		{ "TwoHandSword", W_2HSWORD },
-		{ "Spear", W_1HSPEAR },
-		{ "TwoHandSpear", W_2HSPEAR },
-		{ "Axe", W_1HAXE },
-		{ "TwoHandAxe", W_2HAXE },
-		{ "Mace", W_MACE },
-		{ "TwoHandMace", W_2HMACE },
-		{ "Rod", W_STAFF },
-		{ "Bow", W_BOW },
-		{ "Knuckle", W_KNUCKLE },
-		{ "Instrument", W_MUSICAL },
-		{ "Whip", W_WHIP },
-		{ "Book", W_BOOK },
-		{ "Katar", W_KATAR },
-		{ "Revolver", W_REVOLVER },
-		{ "Rifle", W_RIFLE },
-		{ "GatlingGun", W_GATLING },
-		{ "Shotgun", W_SHOTGUN },
-		{ "GrenadeLauncher", W_GRENADE },
-		{ "FuumaShuriken", W_HUUMA },
-		{ "TwoHandRod", W_2HSTAFF },
-#ifdef RENEWAL_ASPD
-		{ "Shield", MAX_WEAPON_TYPE }
-#endif
-	};
-
-	if ((temp = libconfig->setting_get_member(jdb, "Inherit"))) {
-		int nidx = 0;
-		const char *iname;
-		while ((iname = libconfig->setting_get_string_elem(temp, nidx++))) {
-			int i, iidx, iclass, avg_increment, base;
-			if ((iclass = pc->check_job_name(iname)) == -1) {
-				ShowWarning("status_read_job_db: '%s' trying to inherit unknown '%s'!\n", name, iname);
-				continue;
-			}
-			iidx = pc->class2idx(iclass);
-			status->max_weight_base[idx] = status->max_weight_base[iidx];
-			memcpy(&status->aspd_base[idx], &status->aspd_base[iidx], sizeof(status->aspd_base[iidx]));
-
-			for (i = 1; i <= MAX_LEVEL && status->HP_table[iidx][i]; i++) {
-				status->HP_table[idx][i] = status->HP_table[iidx][i];
-			}
-			base = (i > 1 ? status->HP_table[idx][1] : 35); // Safe value if none are specified
-			avg_increment = (i > 2 ? (status->HP_table[idx][i] - base) / (i-1) : 5); // Safe value if none are specified
-			for ( ; i <= pc->max_level[idx][0]; i++) {
-				status->HP_table[idx][i] = min(base + avg_increment * i, battle_config.max_hp);
-			}
-
-			for (i = 1; i <= MAX_LEVEL && status->SP_table[iidx][i]; i++) {
-				status->SP_table[idx][i] = status->SP_table[iidx][i];
-			}
-			base = (i > 1 ? status->SP_table[idx][1] : 10); // Safe value if none are specified
-			avg_increment = (i > 2 ? (status->SP_table[idx][i] - base) / (i-1) : 1); // Safe value if none are specified
-			for ( ; i <= pc->max_level[idx][0]; i++) {
-				status->SP_table[idx][i] = min(base + avg_increment * i, battle_config.max_sp);
-			}
-		}
-	}
-	if ((temp = libconfig->setting_get_member(jdb, "InheritHP"))) {
-		int nidx = 0;
-		const char *iname;
-		while ((iname = libconfig->setting_get_string_elem(temp, nidx++))) {
-			int i, iidx, iclass, avg_increment, base;
-			if ((iclass = pc->check_job_name(iname)) == -1) {
-				ShowWarning("status_read_job_db: '%s' trying to inherit unknown '%s' HP!\n", name, iname);
-				continue;
-			}
-			iidx = pc->class2idx(iclass);
-			for (i = 1; i <= MAX_LEVEL && status->HP_table[iidx][i]; i++) {
-				status->HP_table[idx][i] = status->HP_table[iidx][i];
-			}
-			base = (i > 1 ? status->HP_table[idx][1] : 35); // Safe value if none are specified
-			avg_increment = (i > 2 ? (status->HP_table[idx][i] - base) / (i-1) : 5); // Safe value if none are specified
-			for ( ; i <= pc->max_level[idx][0]; i++) {
-				status->HP_table[idx][i] = min(base + avg_increment * i, battle_config.max_hp);
-			}
-		}
-	}
-	if ((temp = libconfig->setting_get_member(jdb, "InheritSP"))) {
-		int nidx = 0;
-		const char *iname;
-		while ((iname = libconfig->setting_get_string_elem(temp, nidx++))) {
-			int i, iidx, iclass, avg_increment, base;
-			if ((iclass = pc->check_job_name(iname)) == -1) {
-				ShowWarning("status_read_job_db: '%s' trying to inherit unknown '%s' SP!\n", name, iname);
-				continue;
-			}
-			iidx = pc->class2idx(iclass);
-			for (i = 1; i <= MAX_LEVEL && status->SP_table[iidx][i]; i++) {
-				status->SP_table[idx][i] = status->SP_table[iidx][i];
-			}
-			base = (i > 1 ? status->SP_table[idx][1] : 10); // Safe value if none are specified
-			avg_increment = (i > 2 ? (status->SP_table[idx][i] - base) / (i-1) : 1); // Safe value if none are specified
-			for ( ; i <= pc->max_level[idx][0]; i++) {
-				status->SP_table[idx][i] = min(avg_increment * i, battle_config.max_sp);
-			}
-		}
-	}
-
-	if (libconfig->setting_lookup_int(jdb, "Weight", &i32))
-		status->max_weight_base[idx] = i32;
-	else if (!status->max_weight_base[idx])
-		status->max_weight_base[idx] = 20000;
-
-	if ((temp = libconfig->setting_get_member(jdb, "BaseASPD"))) {
-		int widx = 0;
-		config_setting_t *wpn = NULL;
-		while ((wpn = libconfig->setting_get_elem(temp, widx++))) {
-			int w, wlen = ARRAYLENGTH(wnames);
-			const char *wname = config_setting_name(wpn);
-
-			ARR_FIND(0, wlen, w, strcmp(wnames[w].name, wname) == 0);
-			if (w != wlen) {
-				status->aspd_base[idx][wnames[w].id] = libconfig->setting_get_int(wpn);
-			} else {
-				ShowWarning("status_read_job_db: unknown weapon type '%s'!\n", wname);
-			}
-		}
-	}
-
-	if ((temp = libconfig->setting_get_member(jdb, "HPTable"))) {
-		int level = 0, avg_increment, base;
-		config_setting_t *hp = NULL;
-		while (level <= MAX_LEVEL && (hp = libconfig->setting_get_elem(temp, level))) {
-			i32 = libconfig->setting_get_int(hp);
-			status->HP_table[idx][++level] = min(i32, battle_config.max_hp);
-		}
-		base = (level > 0 ? status->HP_table[idx][1] : 35); // Safe value if none are specified
-		avg_increment = (level > 1 ? (status->HP_table[idx][level] - base) / level : 5); // Safe value if none are specified
-		for (++level; level <= pc->max_level[idx][0]; ++level) { /* limit only to possible maximum level of the given class */
-			status->HP_table[idx][level] = min(base + avg_increment * level, battle_config.max_hp); /* some are still empty? then let's use the average increase */
-		}
-	}
-
-	if ((temp = libconfig->setting_get_member(jdb, "SPTable"))) {
-		int level = 0, avg_increment, base;
-		config_setting_t *sp = NULL;
-		while (level <= MAX_LEVEL && (sp = libconfig->setting_get_elem(temp, level))) {
-			i32 = libconfig->setting_get_int(sp);
-			status->SP_table[idx][++level] = min(i32, battle_config.max_sp);
-		}
-		base = (level > 0 ? status->SP_table[idx][1] : 10); // Safe value if none are specified
-		avg_increment = (level > 1 ? (status->SP_table[idx][level] - base) / level : 1);
-		for ( ; level <= pc->max_level[idx][0]; level++ ) {
-			status->SP_table[idx][level] = min(base + avg_increment * level, battle_config.max_sp);
-		}
-	}
+	return status->dbs->sc_conf[type];
 }
 
 /*------------------------------------------
-* DB reading.
-* job_db.conf    - weight, hp, sp, aspd
+* Leitura da DB.
+* job_RE.txt     - weight, hp, sp, aspd
+* job_PRE.txt    - weight, hp, sp, aspd
 * job_db2.txt    - job level stat bonuses
 * size_fix.txt   - size adjustment table for weapons
 * refine_db.txt  - refining data table
 *------------------------------------------*/
-void status_read_job_db(void) { /* [malufett/Hercules] */
-	int i = 0;
-	config_t job_db_conf;
-	config_setting_t *jdb = NULL;
-	const char *config_filename = 
+bool status_read_job_db(char* fields[], int columns, int current) 
+{ // Job-specific values (weight, HP, SP, ASPD)
+	int idx, class_;
+	unsigned int i;
+
+	class_ = atoi(fields[0]);
+	
+	if(!pc->db_checkid(class_))
+	{
+		ShowWarning("status_read_job_db: Especificada uma classe invalida %d.\n", class_);
+		return false;
+	}
+	
+	idx = pc->class2idx(class_);
+	
+	status->dbs->max_weight_base[idx] = atoi(fields[1]);
+	status->dbs->hp_coefficient[idx]  = atoi(fields[2]);
+	status->dbs->hp_coefficient2[idx] = atoi(fields[3]);
+	status->dbs->sp_coefficient[idx]  = atoi(fields[4]);
+	
 #ifdef RENEWAL_ASPD
-		"db/re/job_db.conf";
+	for(i = 0; i <= MAX_WEAPON_TYPE; i++)
 #else
-		"db/pre-re/job_db.conf";
+	for(i = 0; i < MAX_WEAPON_TYPE; i++)
 #endif
-
-	if ( libconfig->read_file(&job_db_conf, config_filename) ) {
-		ShowError("can't read %s\n", config_filename);
-		return;
+	{
+		status->dbs->aspd_base[idx][i] = atoi(fields[i+5]);
 	}
-	while ( (jdb = libconfig->setting_get_elem(job_db_conf.root, i++)) ) {
-		int class_, idx;
-		const char *name = config_setting_name(jdb);
 
-		if ( (class_ = pc->check_job_name(name)) == -1 ) {
-			ShowWarning("pc_read_job_db: '%s' unknown job name!\n", name);
-			continue;
-		}
-
-		idx = pc->class2idx(class_);
-		status->read_job_db_sub(idx, name, jdb);
-	}
-	ShowStatus("Done reading '"CL_WHITE"%d"CL_RESET"' entries in '"CL_WHITE"%s"CL_RESET"'.\n", i, config_filename);
-	libconfig->destroy(&job_db_conf);
+	return true;
 }
 
 bool status_readdb_job2(char* fields[], int columns, int current)
@@ -12209,14 +12118,14 @@ bool status_readdb_job2(char* fields[], int columns, int current)
 
 	if(!pc->db_checkid(class_))
 	{
-		ShowWarning("status_readdb_job2: Invalid job class %d specified.\n", class_);
+		ShowWarning("status_readdb_job2: Especificado uma classe invalida %d.\n", class_);
 		return false;
 	}
 	idx = pc->class2idx(class_);
 
 	for(i = 1; i < columns; i++)
 	{
-		status->job_bonus[idx][i-1] = atoi(fields[i]);
+		status->dbs->job_bonus[idx][i-1] = atoi(fields[i]);
 	}
 	return true;
 }
@@ -12227,43 +12136,141 @@ bool status_readdb_sizefix(char* fields[], int columns, int current)
 
 	for(i = 0; i < MAX_WEAPON_TYPE; i++)
 	{
-		status->atkmods[current][i] = atoi(fields[i]);
+		status->dbs->atkmods[current][i] = atoi(fields[i]);
 	}
 	return true;
 }
 
-bool status_readdb_refine(char* fields[], int columns, int current)
+/**
+ * Processes a refine_db.conf entry.
+ *
+ * @param *r	  Libconfig setting entry. It is expected to be valid and it
+ *                won't be freed (it is care of the caller to do so if
+ *                necessary)
+ * @param n       Ordinal number of the entry, to be displayed in case of
+ *                validation errors.
+ * @param *source Source of the entry (file name), to be displayed in case of
+ *                validation errors.
+ * @return # of the validated entry, or 0 in case of failure.
+ */
+int status_readdb_refine_libconfig_sub(config_setting_t *r, const char *name, const char *source)
 {
-	int i, bonus_per_level, random_bonus, random_bonus_start_level;
-
-	current = atoi(fields[0]);
-
-	if (current < 0 || current >= REFINE_TYPE_MAX)
-		return false;
-
-	bonus_per_level = atoi(fields[1]);
-	random_bonus_start_level = atoi(fields[2]);
-	random_bonus = atoi(fields[3]);
-
-	for(i = 0; i < MAX_REFINE; i++)
-	{
-		char* delim;
-
-		if (!(delim = strchr(fields[4+i], ':')))
-			return false;
-
-		*delim = '\0';
-
-		status->refine_info[current].chance[i] = atoi(fields[4+i]);
-
-		if (i >= random_bonus_start_level - 1)
-			status->refine_info[current].randombonus_max[i] = random_bonus * (i - random_bonus_start_level + 2);
-
-		status->refine_info[current].bonus[i] = bonus_per_level + atoi(delim+1);
-		if (i > 0)
-			status->refine_info[current].bonus[i] += status->refine_info[current].bonus[i-1];
+	config_setting_t *rate = NULL;
+	int type = REFINE_TYPE_ARMOR, bonus_per_level = 0, rnd_bonus_v = 0, rnd_bonus_lv = 0;
+	char lv[4];
+	nullpo_ret(r);
+	nullpo_ret(name);
+	nullpo_ret(source);
+	
+	if (strncmp(name, "Armors", 6) == 0) {
+		type = REFINE_TYPE_ARMOR;
+	} else if (strncmp(name, "WeaponLevel", 11) != 0 || !strspn(&name[strlen(name)-1], "0123456789") || (type = atoi(strncpy(lv, name+11, 2))) == REFINE_TYPE_ARMOR) {
+		ShowError("status_readdb_refine_libconfig_sub: Nome chave invalido para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
 	}
-	return true;
+	if (type < REFINE_TYPE_ARMOR || type >= REFINE_TYPE_MAX) {
+		ShowError("status_readdb_refine_libconfig_sub: Nivel fora de alcance para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
+	}
+	if (!libconfig->setting_lookup_int(r, "StatsPerLevel", &bonus_per_level)) {
+		ShowWarning("status_readdb_refine_libconfig_sub: Faltando StatsPerLevel para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
+	}
+	if (!libconfig->setting_lookup_int(r, "RandomBonusStartLevel", &rnd_bonus_lv)) {
+		ShowWarning("status_readdb_refine_libconfig_sub: Faltando RandomBonusStartLevel para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
+	}
+	if (!libconfig->setting_lookup_int(r, "RandomBonusValue", &rnd_bonus_v)) {
+		ShowWarning("status_readdb_refine_libconfig_sub: Faltando RandomBonusValue para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
+	}
+
+	if ((rate=libconfig->setting_get_member(r, "Rates")) != NULL && config_setting_is_group(rate)) {
+		config_setting_t *t = NULL;
+		bool duplicate[MAX_REFINE];
+		int bonus[MAX_REFINE], rnd_bonus[MAX_REFINE], chance[MAX_REFINE];
+		int i;
+		memset(&duplicate, 0, sizeof(duplicate));
+		memset(&bonus, 0, sizeof(bonus));
+		memset(&rnd_bonus, 0, sizeof(rnd_bonus));
+
+		for (i = 0; i < MAX_REFINE; i++) {
+			chance[i] = 100;
+		}
+		i = 0;
+		while ((t = libconfig->setting_get_elem(rate,i++)) != NULL && config_setting_is_group(t)) {
+			int level = 0, i32;
+			char *rlvl = config_setting_name(t);
+			memset(&lv, 0, sizeof(lv));
+			if (!strspn(&rlvl[strlen(rlvl)-1], "0123456789") || (level = atoi(strncpy(lv, rlvl+2, 3))) <= 0) {
+				ShowError("status_readdb_refine_libconfig_sub: Formato de Nivel de Refinamento '%s' invalido para a entrada %s em \"%s\"... pulando.\n", rlvl, name, source);
+				continue;
+			}
+			if (level <= 0 || level > MAX_REFINE) {
+				ShowError("status_readdb_refine_libconfig_sub: Nivel de Refinamento '%s' fora de alcance para a entrada %s em \"%s\"... pulando.\n", rlvl, name, source);
+				continue;
+			}
+			level--;
+			if (duplicate[level]) {
+				ShowWarning("status_readdb_refine_libconfig_sub: taxa '%s' duplicada para a entrada %s em \"%s\", substituindo a entrada anterior...\n", rlvl, name, source);
+			} else {
+				duplicate[level] = true;
+			}
+			if (libconfig->setting_lookup_int(t, "Chance", &i32))
+				chance[level] = i32;
+			else
+				chance[level] = 100;
+			if (libconfig->setting_lookup_int(t, "Bonus", &i32))
+				bonus[level] += i32;
+			if (level >= rnd_bonus_lv - 1)
+				rnd_bonus[level] = rnd_bonus_v * (level - rnd_bonus_lv + 2);
+		}
+		for (i = 0; i < MAX_REFINE; i++) {
+			status->dbs->refine_info[type].chance[i] = chance[i];
+			status->dbs->refine_info[type].randombonus_max[i] = rnd_bonus[i];
+			bonus[i] += bonus_per_level + (i > 0 ? bonus[i-1] : 0);
+			status->dbs->refine_info[type].bonus[i] = bonus[i];
+		}
+	} else {
+		ShowWarning("status_readdb_refine_libconfig_sub: Faltando Taxas de Refinamento para a entrada '%s' em \"%s\", pulando.\n", name, source);
+		return 0;
+	}
+	return type+1;
+}
+
+/**
+ * Reads from a libconfig-formatted refine_db.conf file.
+ *
+ * @param *filename File name, relative to the database path.
+ * @return The number of found entries.
+ */
+int status_readdb_refine_libconfig(const char *filename) {
+	bool duplicate[REFINE_TYPE_MAX];
+	config_t refine_db_conf;
+	config_setting_t *r;
+	char filepath[256];
+	int i = 0, count = 0,type = 0;
+	
+	sprintf(filepath, "%s/%s", map->db_path, filename);
+	memset(&duplicate,0,sizeof(duplicate));
+	if( libconfig->read_file(&refine_db_conf, filepath) ) {
+		ShowError("can't read %s\n", filepath);
+		return 0;
+	}
+	
+	while((r = libconfig->setting_get_elem(refine_db_conf.root,i++))) {
+		char *name = config_setting_name(r);
+		if((type=status->readdb_refine_libconfig_sub(r, name, filename))) {
+			if( duplicate[type-1] ) {
+				ShowWarning("status_readdb_refine_libconfig: entrada duplicada para %s em \"%s\", substituindo entrada anterior...\n", name, filename);
+			} else duplicate[type-1] = true;
+			count++;
+		}
+	}
+	libconfig->destroy(&refine_db_conf);
+	ShowStatus("Realizada leitura de '"CL_WHITE"%d"CL_RESET"' entradas em '"CL_WHITE"%s"CL_RESET"'.\n", count, filename);
+	
+	return count;
 }
 
 bool status_readdb_scconfig(char* fields[], int columns, int current) {
@@ -12271,17 +12278,18 @@ bool status_readdb_scconfig(char* fields[], int columns, int current) {
 	char* type = fields[0];
 
 	if( !script->get_constant(type, &val) ){
-		ShowWarning("status_readdb_sc_conf: Invalid status type %s specified.\n", type);
+		ShowWarning("status_readdb_sc_conf: Especificado tipo de status %s invalido.\n", type);
 		return false;
 	}
 
-	status->sc_conf[val] = (int)strtol(fields[1], NULL, 0);
+	status->dbs->sc_conf[val] = (int)strtol(fields[1], NULL, 0);
 
 	return true;
 }
 /**
  * Read status db
- * job1.txt
+ * Job_Table_RE.txt
+ * Job_Table_PRE.txt
  * job2.txt
  * size_fixe.txt
  * refine_db.txt
@@ -12292,43 +12300,45 @@ int status_readdb(void)
 
 	// initialize databases to default
 	//
-	if( runflag == MAPSERVER_ST_RUNNING ) {//not necessary during boot
-		// reset job_db.conf data
-		memset(status->max_weight_base, 0, sizeof(status->max_weight_base));
-		memset(status->HP_table, 0, sizeof(status->HP_table));
-		memset(status->SP_table, 0, sizeof(status->SP_table));
+	if( core->runflag == MAPSERVER_ST_RUNNING ) {//not necessary during boot
+		// Reinicia os dados das tabelas de classe (RE/PRE)
+		memset(status->dbs->max_weight_base, 0, sizeof(status->dbs->max_weight_base));
+		memset(status->dbs->hp_coefficient, 0, sizeof(status->dbs->hp_coefficient));
+		memset(status->dbs->hp_coefficient2, 0, sizeof(status->dbs->hp_coefficient2));
+		memset(status->dbs->hp_sigma_val, 0, sizeof(status->dbs->hp_sigma_val));
+		memset(status->dbs->sp_coefficient, 0, sizeof(status->dbs->sp_coefficient));
+		memset(status->dbs->aspd_base, 0, sizeof(status->dbs->aspd_base));
 		// reset job_db2.txt data
-		memset(status->job_bonus,0,sizeof(status->job_bonus)); // Job-specific stats bonus
-	}
-	for ( i = 0; i < CLASS_COUNT; i++ ) {
-		for ( j = 0; j < MAX_WEAPON_TYPE; j++ )
-			status->aspd_base[i][j] = 2000;
-#ifdef RENEWAL_ASPD
-		status->aspd_base[i][MAX_WEAPON_TYPE] = 0;
-#endif
+		memset(status->dbs->job_bonus,0,sizeof(status->dbs->job_bonus)); // Job-specific stats bonus
 	}
 
 	// size_fix.txt
-	for(i = 0; i < ARRAYLENGTH(status->atkmods); i++)
+	for(i = 0; i < ARRAYLENGTH(status->dbs->atkmods); i++)
 		for(j = 0; j < MAX_WEAPON_TYPE; j++)
-			status->atkmods[i][j] = 100;
+			status->dbs->atkmods[i][j] = 100;
 
 	// refine_db.txt
-	for(i=0;i<ARRAYLENGTH(status->refine_info);i++) {
+	for(i=0;i<ARRAYLENGTH(status->dbs->refine_info);i++) {
 		for(j=0;j<MAX_REFINE; j++) {
-			status->refine_info[i].chance[j] = 100;
-			status->refine_info[i].bonus[j] = 0;
-			status->refine_info[i].randombonus_max[j] = 0;
+			status->dbs->refine_info[i].chance[j] = 100;
+			status->dbs->refine_info[i].bonus[j] = 0;
+			status->dbs->refine_info[i].randombonus_max[j] = 0;
 		}
 	}
 
-	// read databases
+	// Leitura das databases
 	//
-	sv->readdb(map->db_path, "job_db2.txt",         ',', 1,                 1+MAX_LEVEL,       -1,                       status->readdb_job2);
-	sv->readdb(map->db_path, DBPATH"size_fix.txt", ',', MAX_WEAPON_TYPE, MAX_WEAPON_TYPE, ARRAYLENGTH(status->atkmods), status->readdb_sizefix);
-	sv->readdb(map->db_path, DBPATH"refine_db.txt", ',', 4+MAX_REFINE,      4+MAX_REFINE,      ARRAYLENGTH(status->refine_info), status->readdb_refine);
-	sv->readdb(map->db_path, "sc_config.txt",       ',', 2,                 2,                 SC_MAX,                   status->readdb_scconfig);
-	status->read_job_db();
+	#ifdef RENEWAL
+		sv->readdb(map->db_path, "Job_DB/Job_Table_RE.txt",   ',', 6+MAX_WEAPON_TYPE, 6+MAX_WEAPON_TYPE, -1, status->read_job_db);
+		sv->readdb(map->db_path, "Status_DB/Size_Fix_RE.txt", ',', MAX_WEAPON_TYPE, MAX_WEAPON_TYPE, ARRAYLENGTH(status->dbs->atkmods), status->readdb_sizefix);
+		status->readdb_refine_libconfig("Status_DB/Refine_RE.conf");
+	#else
+		sv->readdb(map->db_path, "Job_DB/Job_Table_PRE.txt",   ',', 5+MAX_WEAPON_TYPE, 5+MAX_WEAPON_TYPE, -1, status->read_job_db);
+		sv->readdb(map->db_path, "Status_DB/Size_Fix_PRE.txt", ',', MAX_WEAPON_TYPE, MAX_WEAPON_TYPE, ARRAYLENGTH(status->dbs->atkmods), status->readdb_sizefix);
+		status->readdb_refine_libconfig("Status_DB/Refine_PRE.conf");
+	#endif
+		sv->readdb(map->db_path, "Job_DB/Job_DB2.txt",      ',', 1, 1+MAX_LEVEL,-1,status->readdb_job2);
+		sv->readdb(map->db_path, "Status_DB/SC_Config.txt", ',', 2, 2, SC_MAX, status->readdb_scconfig);
 
 	return 0;
 }
@@ -12346,6 +12356,7 @@ int do_init_status(bool minimal) {
 	status->initChangeTables();
 	status->initDummyData();
 	status->readdb();
+	status->calc_sigma();
 	status->natural_heal_prev_tick = timer->gettick();
 	status->data_ers = ers_new(sizeof(struct status_change_entry),"status.c::data_ers",ERS_OPT_NONE);
 	timer->add_interval(status->natural_heal_prev_tick + NATURAL_HEAL_INTERVAL, status->natural_heal_timer, 0, 0, NATURAL_HEAL_INTERVAL);
@@ -12362,6 +12373,7 @@ void do_final_status(void) {
 *-------------------------------------*/
 void status_defaults(void) {
 	status = &status_s;
+	status->dbs = &statusdbs;
 
 	/* vars */
 	//we need it for new cards 15 Feb 2005, to check if the combo cards are insrerted into the CURRENT weapon only
@@ -12370,7 +12382,7 @@ void status_defaults(void) {
 	status->current_equip_card_id = 0;    //To prevent card-stacking (from jA) [Skotlex]
 
 	// These macros are used instead of a sum of sizeof(), to ensure that padding won't interfere with our size, and code won't rot when adding more fields
-	memset(ZEROED_BLOCK_POS(status), 0, ZEROED_BLOCK_SIZE(status));
+	memset(ZEROED_BLOCK_POS(status->dbs), 0, ZEROED_BLOCK_SIZE(status->dbs));
 
 	status->data_ers = NULL;
 	memset(&status->dummy, 0, sizeof(status->dummy));
@@ -12432,6 +12444,7 @@ void status_defaults(void) {
 	status->calc_mob_ = status_calc_mob_;
 	status->calc_pet_ = status_calc_pet_;
 	status->calc_pc_ = status_calc_pc_;
+	status->calc_pc_additional = status_calc_pc_additional;
 	status->calc_homunculus_ = status_calc_homunculus_;
 	status->calc_mercenary_ = status_calc_mercenary_;
 	status->calc_elemental_ = status_calc_elemental_;
@@ -12466,8 +12479,9 @@ void status_defaults(void) {
 	status->initDummyData = initDummyData;
 	status->base_amotion_pc = status_base_amotion_pc;
 	status->base_atk = status_base_atk;
-	status->get_base_maxhp = status_get_base_maxhp;
-	status->get_base_maxsp = status_get_base_maxsp;
+	status->calc_sigma = status_calc_sigma;
+	status->base_pc_maxhp = status_base_pc_maxhp;
+	status->base_pc_maxsp = status_base_pc_maxsp;
 	status->calc_npc_ = status_calc_npc_;
 	status->calc_str = status_calc_str;
 	status->calc_agi = status_calc_agi;
@@ -12499,8 +12513,8 @@ void status_defaults(void) {
 	status->natural_heal_timer = status_natural_heal_timer;
 	status->readdb_job2 = status_readdb_job2;
 	status->readdb_sizefix = status_readdb_sizefix;
-	status->readdb_refine = status_readdb_refine;
+	status->readdb_refine_libconfig = status_readdb_refine_libconfig;
+	status->readdb_refine_libconfig_sub = status_readdb_refine_libconfig_sub;
 	status->readdb_scconfig = status_readdb_scconfig;
 	status->read_job_db = status_read_job_db;
-	status->read_job_db_sub = status_read_job_db_sub;
 }

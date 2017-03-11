@@ -1,7 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "HPMmap.h"
 
@@ -15,7 +40,7 @@
 #include "common/db.h"
 #include "common/des.h"
 #include "common/ers.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mapindex.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
@@ -85,84 +110,63 @@ struct HPM_atcommand_list {
 struct HPM_atcommand_list *atcommand_list = NULL;
 unsigned int atcommand_list_items = 0;
 
-bool HPM_map_grabHPData(struct HPDataOperationStorage *ret, enum HPluginDataTypes type, void *ptr) {
-	/* record address */
-	switch( type ) {
+/**
+ * HPM plugin data store validator sub-handler (map-server)
+ *
+ * @see HPM_interface::data_store_validate
+ */
+bool HPM_map_data_store_validate(enum HPluginDataTypes type, struct hplugin_data_store **storeptr, bool initialize)
+{
+	switch (type) {
 		case HPDT_MSD:
-			ret->HPDataSRCPtr = (void**)(&((struct map_session_data *)ptr)->hdata);
-			ret->hdatac = &((struct map_session_data *)ptr)->hdatac;
-			break;
 		case HPDT_NPCD:
-			ret->HPDataSRCPtr = (void**)(&((struct npc_data *)ptr)->hdata);
-			ret->hdatac = &((struct npc_data *)ptr)->hdatac;
-			break;
 		case HPDT_MAP:
-			ret->HPDataSRCPtr = (void**)(&((struct map_data *)ptr)->hdata);
-			ret->hdatac = &((struct map_data *)ptr)->hdatac;
-			break;
 		case HPDT_PARTY:
-			ret->HPDataSRCPtr = (void**)(&((struct party_data *)ptr)->hdata);
-			ret->hdatac = &((struct party_data *)ptr)->hdatac;
-			break;
 		case HPDT_GUILD:
-			ret->HPDataSRCPtr = (void**)(&((struct guild *)ptr)->hdata);
-			ret->hdatac = &((struct guild *)ptr)->hdatac;
-			break;
 		case HPDT_INSTANCE:
-			ret->HPDataSRCPtr = (void**)(&((struct instance_data *)ptr)->hdata);
-			ret->hdatac = &((struct instance_data *)ptr)->hdatac;
-			break;
 		case HPDT_MOBDB:
-			ret->HPDataSRCPtr = (void**)(&((struct mob_db *)ptr)->hdata);
-			ret->hdatac = &((struct mob_db *)ptr)->hdatac;
-			break;
 		case HPDT_MOBDATA:
-			ret->HPDataSRCPtr = (void**)(&((struct mob_data *)ptr)->hdata);
-			ret->hdatac = &((struct mob_data *)ptr)->hdatac;
-			break;
 		case HPDT_ITEMDATA:
-			ret->HPDataSRCPtr = (void**)(&((struct item_data *)ptr)->hdata);
-			ret->hdatac = &((struct item_data *)ptr)->hdatac;
-			break;
 		case HPDT_BGDATA:
-			ret->HPDataSRCPtr = (void**)(&((struct battleground_data *)ptr)->hdata);
-			ret->hdatac = &((struct battleground_data *)ptr)->hdatac;
-			break;
+		case HPDT_AUTOTRADE_VEND:
+			// Initialized by the caller.
+			return true;
 		default:
-			return false;
+			break;
 	}
-	return true;
+	return false;
 }
 
 void HPM_map_plugin_load_sub(struct hplugin *plugin) {
-	plugin->hpi->addCommand       = HPM->import_symbol("addCommand",plugin->idx);
-	plugin->hpi->addScript        = HPM->import_symbol("addScript",plugin->idx);
-	plugin->hpi->addPCGPermission = HPM->import_symbol("addGroupPermission",plugin->idx);
+	plugin->hpi->sql_handle = map->mysql_handle;
+	plugin->hpi->addCommand = atcommand->create;
+	plugin->hpi->addScript  = script->addScript;
+	plugin->hpi->addPCGPermission = HPM_map_add_group_permission;
 }
 
 bool HPM_map_add_atcommand(char *name, AtCommandFunc func) {
 	unsigned int i = 0;
-	
+
 	for(i = 0; i < atcommand_list_items; i++) {
 		if( !strcmpi(atcommand_list[i].name,name) ) {
-			ShowDebug("HPM_map_add_atcommand: duplicate command '%s', skipping...\n", name);
+			ShowDebug("HPM_map_add_atcommand: comando duplicado'%s', pulando...\n", name);
 			return false;
 		}
 	}
-	
+
 	i = atcommand_list_items;
-	
+
 	RECREATE(atcommand_list, struct HPM_atcommand_list , ++atcommand_list_items);
-	
+
 	safestrncpy(atcommand_list[i].name, name, sizeof(atcommand_list[i].name));
 	atcommand_list[i].func = func;
-	
+
 	return true;
 }
 
 void HPM_map_atcommands(void) {
 	unsigned int i;
-	
+
 	for(i = 0; i < atcommand_list_items; i++) {
 		atcommand->add(atcommand_list[i].name,atcommand_list[i].func,true);
 	}
@@ -173,9 +177,9 @@ void HPM_map_atcommands(void) {
  **/
 void HPM_map_add_group_permission(unsigned int pluginID, char *name, unsigned int *mask) {
 	unsigned char index = pcg->HPMpermissions_count;
-	
+
 	RECREATE(pcg->HPMpermissions, struct pc_groups_new_permission, ++pcg->HPMpermissions_count);
-	
+
 	pcg->HPMpermissions[index].pID = pluginID;
 	pcg->HPMpermissions[index].name = aStrdup(name);
 	pcg->HPMpermissions[index].mask = mask;
@@ -183,8 +187,9 @@ void HPM_map_add_group_permission(unsigned int pluginID, char *name, unsigned in
 
 void HPM_map_do_init(void) {
 	HPM->load_sub = HPM_map_plugin_load_sub;
-	HPM->grabHPDataSub = HPM_map_grabHPData;
+	HPM->data_store_validate_sub = HPM_map_data_store_validate;
 	HPM->datacheck_init(HPMDataCheck, HPMDataCheckLen, HPMDataCheckVer);
+	HPM_shared_symbols(SERVER_TYPE_MAP);
 }
 
 void HPM_map_do_final(void) {
@@ -201,6 +206,5 @@ void HPM_map_do_final(void) {
 		}
 		aFree(pcg->HPMpermissions);
 	}
-	
 	HPM->datacheck_final();
 }

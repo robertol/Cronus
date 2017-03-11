@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // DBPATH
 #include "int_guild.h"
@@ -12,7 +36,7 @@
 #include "char/mapif.h"
 #include "common/cbasetypes.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -35,6 +59,7 @@
 #define GUILD_ALLIANCE_REMOVE 0x08
 
 struct inter_guild_interface inter_guild_s;
+struct inter_guild_interface *inter_guild;
 
 static const char dataToHex[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
@@ -68,7 +93,7 @@ int inter_guild_save_timer(int tid, int64 tick, int id, intptr_t data) {
 		if( g->save_flag == GS_REMOVE )
 		{// Nothing to save, guild is ready for removal.
 			if (save_log)
-				ShowInfo("Guild Unloaded (%d - %s)\n", g->guild_id, g->name);
+				ShowInfo("Descarregando Guilds (%d - %s)\n", g->guild_id, g->name);
 			db_remove(inter_guild->guild_db, key);
 		}
 	}
@@ -120,7 +145,7 @@ int inter_guild_tosql(struct guild *g,int flag)
 	if (g->guild_id<=0 && g->guild_id != -1) return 0;
 
 #ifdef NOISY
-	ShowInfo("Save guild request ("CL_BOLD"%d"CL_RESET" - flag 0x%x).",g->guild_id, flag);
+	ShowInfo("Requisicao para salvar o clan ("CL_BOLD"%d"CL_RESET" - flag 0x%x).",g->guild_id, flag);
 #endif
 
 	SQL->EscapeStringLen(inter->sql_handle, esc_name, g->name, strnlen(g->name, NAME_LENGTH));
@@ -325,7 +350,7 @@ int inter_guild_tosql(struct guild *g,int flag)
 	}
 
 	if (save_log)
-		ShowInfo("Saved guild (%d - %s):%s\n",g->guild_id,g->name,t_info);
+		ShowInfo("Clan salvo (%d - %s):%s\n",g->guild_id,g->name,t_info);
 	return 1;
 }
 
@@ -346,7 +371,7 @@ struct guild * inter_guild_fromsql(int guild_id)
 		return g;
 
 #ifdef NOISY
-	ShowInfo("Guild load request (%d)...\n", guild_id);
+	ShowInfo("Requisicao para carregar o clan (%d)...\n", guild_id);
 #endif
 
 	if( SQL_ERROR == SQL->Query(inter->sql_handle, "SELECT g.`name`,c.`name`,g.`guild_lv`,g.`connect_member`,g.`max_member`,g.`average_lv`,g.`exp`,g.`next_exp`,g.`skill_point`,g.`mes1`,g.`mes2`,g.`emblem_len`,g.`emblem_id`,g.`emblem_data` "
@@ -369,7 +394,7 @@ struct guild * inter_guild_fromsql(int guild_id)
 	SQL->GetData(inter->sql_handle,  4, &data, NULL); g->max_member = atoi(data);
 	if (g->max_member > MAX_GUILD) {
 		// Fix reduction of MAX_GUILD [PoW]
-		ShowWarning("Guild %d:%s specifies higher capacity (%d) than MAX_GUILD (%d)\n", guild_id, g->name, g->max_member, MAX_GUILD);
+		ShowWarning("Guild %d:%s a capacidade especificada (%d) deve maior que MAX_GUILD (%d)\n", guild_id, g->name, g->max_member, MAX_GUILD);
 		g->max_member = MAX_GUILD;
 	}
 	SQL->GetData(inter->sql_handle,  5, &data, NULL); g->average_lv = atoi(data);
@@ -513,7 +538,7 @@ struct guild * inter_guild_fromsql(int guild_id)
 	g->save_flag |= GS_REMOVE; //But set it to be removed, in case it is not needed for long.
 
 	if (save_log)
-		ShowInfo("Guild loaded (%d - %s)\n", guild_id, g->name);
+		ShowInfo("Clans carregados (%d - %s)\n", guild_id, g->name);
 
 	return g;
 }
@@ -536,7 +561,7 @@ int inter_guild_castle_tosql(struct guild_castle *gc)
 	if (SQL_ERROR == SQL->QueryStr(inter->sql_handle, StrBuf->Value(&buf)))
 		Sql_ShowDebug(inter->sql_handle);
 	else if(save_log)
-		ShowInfo("Saved guild castle (%d)\n", gc->castle_id);
+		ShowInfo("Castelo do clan, salvo (%d)\n", gc->castle_id);
 
 	StrBuf->Destroy(&buf);
 	return 0;
@@ -588,7 +613,7 @@ struct guild_castle* inter_guild_castle_fromsql(int castle_id)
 	idb_put(inter_guild->castle_db, castle_id, gc);
 
 	if (save_log)
-		ShowInfo("Loaded guild castle (%d - guild %d)\n", castle_id, gc->guild_id);
+		ShowInfo("Carregado castelo do clan (%d - clan %d)\n", castle_id, gc->guild_id);
 
 	return gc;
 }
@@ -600,7 +625,7 @@ bool inter_guild_exp_parse_row(char* split[], int column, int current) {
 	nullpo_retr(true, split);
 
 	if (exp < 0 || exp >= UINT_MAX) {
-		ShowError("exp_guild: Invalid exp %"PRId64" (valid range: 0 - %u) at line %d\n", exp, UINT_MAX, current);
+		ShowError("exp_guild: Exp invalida %"PRId64" (range valido: 0 - %u) na linha %d\n", exp, UINT_MAX, current);
 		return false;
 	}
 
@@ -639,7 +664,7 @@ int inter_guild_CharOnline(int char_id, int guild_id) {
 
 	g = inter_guild->fromsql(guild_id);
 	if(!g) {
-		ShowError("Character %d's guild %d not found!\n", char_id, guild_id);
+		ShowError("Personagem %d's do clan %d nao encontrado!\n", char_id, guild_id);
 		return 0;
 	}
 
@@ -720,8 +745,12 @@ int inter_guild_sql_init(void)
 	inter_guild->guild_db= idb_alloc(DB_OPT_RELEASE_DATA);
 	inter_guild->castle_db = idb_alloc(DB_OPT_RELEASE_DATA);
 
-	//Read exp file
-	sv->readdb("db", DBPATH"exp_guild.txt", ',', 1, 1, MAX_GUILDLEVEL, inter_guild->exp_parse_row);
+	// [ New DB ]
+	#ifdef RENEWAL
+		sv->readdb("db", "Guild_DB/Guild_Exp_RE.txt", ',', 1, 1, MAX_GUILDLEVEL, inter_guild->exp_parse_row);
+	#else
+		sv->readdb("db", "Guild_DB/Guild_Exp_PRE.txt", ',', 1, 1, MAX_GUILDLEVEL, inter_guild->exp_parse_row);
+	#endif
 
 	timer->add_func_list(inter_guild->save_timer, "inter_guild->save_timer");
 	timer->add(timer->gettick() + 10000, inter_guild->save_timer, 0, 0);
@@ -839,7 +868,7 @@ int inter_guild_calcinfo(struct guild *g)
 	g->max_member = BASE_GUILD_SIZE + inter_guild->checkskill(g, GD_EXTENSION) * 6;
 	if(g->max_member > MAX_GUILD)
 	{
-		ShowError("Guild %d:%s has capacity for too many guild members (%d), max supported is %d\n", g->guild_id, g->name, g->max_member, MAX_GUILD);
+		ShowError("Guild %d:%s possui capacidade para muitos membros do clan (%d), o maximo suportado e %d\n", g->guild_id, g->name, g->max_member, MAX_GUILD);
 		g->max_member = MAX_GUILD;
 	}
 
@@ -857,7 +886,7 @@ int inter_guild_calcinfo(struct guild *g)
 			}
 			else
 			{
-				ShowWarning("Guild %d:%s, member %d:%s has an invalid level %d\n", g->guild_id, g->name, g->member[i].char_id, g->member[i].name, g->member[i].lv);
+				ShowWarning("Guild %d:%s, o membro %d:%s tem nivel invalido %d\n", g->guild_id, g->name, g->member[i].char_id, g->member[i].name, g->member[i].lv);
 			}
 
 			if(g->member[i].online)
@@ -888,7 +917,7 @@ int mapif_guild_created(int fd, int account_id, struct guild *g)
 	if(g != NULL)
 	{
 		WFIFOL(fd,6)=g->guild_id;
-		ShowInfo("int_guild: Guild created (%d - %s)\n",g->guild_id,g->name);
+		ShowInfo("int_guild: Clan criado (%d - %s)\n",g->guild_id,g->name);
 	} else
 		WFIFOL(fd,6)=0;
 
@@ -903,7 +932,7 @@ int mapif_guild_noinfo(int fd, int guild_id)
 	WBUFW(buf,0)=0x3831;
 	WBUFW(buf,2)=8;
 	WBUFL(buf,4)=guild_id;
-	ShowWarning("int_guild: info not found %d\n",guild_id);
+	ShowWarning("int_guild: Informacao nao encontrada %d\n",guild_id);
 	if(fd<0)
 		mapif->sendall(buf,8);
 	else
@@ -955,7 +984,7 @@ int mapif_guild_withdraw(int guild_id,int account_id,int char_id,int flag, const
 	memcpy(WBUFP(buf,15),mes,40);
 	memcpy(WBUFP(buf,55),name,NAME_LENGTH);
 	mapif->sendall(buf,55+NAME_LENGTH);
-	ShowInfo("int_guild: guild withdraw (%d - %d: %s - %s)\n",guild_id,account_id,name,mes);
+	ShowInfo("int_guild: Removendo o clan (%d - %d: %s - %s)\n",guild_id,account_id,name,mes);
 	return 0;
 }
 
@@ -984,7 +1013,7 @@ int mapif_guild_broken(int guild_id, int flag)
 	WBUFL(buf,2)=guild_id;
 	WBUFB(buf,6)=flag;
 	mapif->sendall(buf,7);
-	ShowInfo("int_guild: Guild broken (%d)\n",guild_id);
+	ShowInfo("int_guild: Alianca quebrada (%d)\n",guild_id);
 	return 0;
 }
 
@@ -1151,12 +1180,12 @@ int mapif_parse_CreateGuild(int fd,int account_id,char *name,struct guild_member
 	struct guild *g;
 	int i=0;
 #ifdef NOISY
-	ShowInfo("Creating Guild (%s)\n", name);
+	ShowInfo("Criando clan (%s)\n", name);
 #endif
 	nullpo_ret(name);
 	nullpo_ret(master);
 	if(inter_guild->search_guildname(name) != 0){
-		ShowInfo("int_guild: guild with same name exists [%s]\n",name);
+		ShowInfo("int_guild: Clans com mesmo nome [%s]\n",name);
 		mapif->guild_created(fd,account_id,NULL);
 		return 0;
 	}
@@ -1206,12 +1235,12 @@ int mapif_parse_CreateGuild(int fd,int account_id,char *name,struct guild_member
 	// Create the guild
 	if (!inter_guild->tosql(g,GS_BASIC|GS_POSITION|GS_SKILL|GS_MEMBER)) {
 		//Failed to Create guild....
-		ShowError("Failed to create Guild %s (Guild Master: %s)\n", g->name, g->master);
+		ShowError("Falhou ao criar um clan %s (Lider do Clan: %s)\n", g->name, g->master);
 		mapif->guild_created(fd,account_id,NULL);
 		aFree(g);
 		return 0;
 	}
-	ShowInfo("Created Guild %d - %s (Guild Master: %s)\n", g->guild_id, g->name, g->master);
+	ShowInfo("Clan criado %d - %s (Lider do Clan: %s)\n", g->guild_id, g->name, g->master);
 
 	//Add to cache
 	idb_put(inter_guild->guild_db, g->guild_id, g);
@@ -1221,7 +1250,7 @@ int mapif_parse_CreateGuild(int fd,int account_id,char *name,struct guild_member
 	mapif->guild_info(fd,g);
 
 	if(log_inter)
-		inter->log("guild %s (id=%d) created by master %s (id=%d)\n",
+		inter->log("Clan %s (id=%d) criado por %s (id=%d)\n",
 			name, g->guild_id, master->name, master->account_id );
 
 	return 0;
@@ -1430,7 +1459,7 @@ int mapif_parse_BreakGuild(int fd, int guild_id)
 	mapif->guild_broken(guild_id,0);
 
 	if(log_inter)
-		inter->log("guild %s (id=%d) broken\n",g->name,guild_id);
+		inter->log("Alianca %s (id=%d) quebrada\n",g->name,guild_id);
 
 	//Remove the guild from memory. [Skotlex]
 	idb_remove(inter_guild->guild_db, guild_id);
@@ -1492,7 +1521,7 @@ int mapif_parse_GuildBasicInfoChange(int fd, int guild_id, int type, const void 
 			break;
 
 		default:
-			ShowError("int_guild: GuildBasicInfoChange: Unknown type %d, see mmo.h::guild_basic_info for more information\n",type);
+			ShowError("int_guild: GuildBasicInfoChange: Tipo desconhecido %d, verificar mmo.h::guild_basic_info para mais informacoes\n",type);
 			return 0;
 	}
 	mapif->guild_info(-1,g);
@@ -1522,7 +1551,7 @@ int mapif_parse_GuildMemberInfoChange(int fd, int guild_id, int account_id, int 
 
 	// Not Found
 	if(i==g->max_member){
-		ShowWarning("int_guild: GuildMemberChange: Not found %d,%d in guild (%d - %s)\n",
+		ShowWarning("int_guild: GuildMemberChange: Nao encontrado %d,%d no clan (%d - %s)\n",
 			account_id,char_id,guild_id,g->name);
 		return 0;
 	}
@@ -1604,7 +1633,7 @@ int mapif_parse_GuildMemberInfoChange(int fd, int guild_id, int account_id, int 
 			break;
 		}
 		default:
-		  ShowError("int_guild: GuildMemberInfoChange: Unknown type %d\n",type);
+		  ShowError("int_guild: GuildMemberInfoChange: Tipo desconhecido %d\n",type);
 		  break;
 	}
 	return 0;
@@ -1624,14 +1653,14 @@ int inter_guild_charname_changed(int guild_id, int account_id, int char_id, char
 	g = inter_guild->fromsql(guild_id);
 	if( g == NULL )
 	{
-		ShowError("inter_guild_charrenamed: Can't find guild %d.\n", guild_id);
+		ShowError("inter_guild_charrenamed: Nao pode achar o clan %d.\n", guild_id);
 		return 0;
 	}
 
 	ARR_FIND(0, g->max_member, i, g->member[i].char_id == char_id);
 	if( i == g->max_member )
 	{
-		ShowError("inter_guild_charrenamed: Can't find character %d in the guild\n", char_id);
+		ShowError("inter_guild_charrenamed: Nao pode achar o personagem %d no clan\n", char_id);
 		return 0;
 	}
 
@@ -1677,7 +1706,7 @@ int mapif_parse_GuildSkillUp(int fd, int guild_id, uint16 skill_id, int account_
 	int idx = skill_id - GD_SKILLBASE;
 
 	g = inter_guild->fromsql(guild_id);
-	if(g == NULL || idx < 0 || idx >= MAX_GUILDSKILL)
+	if(!g || idx < 0 || idx >= MAX_GUILDSKILL)
 		return 0;
 
 	if(g->skill_point>0 && g->skill[idx].id>0 && g->skill[idx].lv<max )
@@ -1802,7 +1831,7 @@ int mapif_parse_GuildCastleDataSave(int fd, int castle_id, int index, int value)
 	struct guild_castle *gc = inter_guild->castle_fromsql(castle_id);
 
 	if (gc == NULL) {
-		ShowError("mapif->parse_GuildCastleDataSave: castle id=%d not found\n", castle_id);
+		ShowError("mapif->parse_GuildCastleDataSave: Castelo id=%d nao encontrado\n", castle_id);
 		return 0;
 	}
 
@@ -1811,8 +1840,8 @@ int mapif_parse_GuildCastleDataSave(int fd, int castle_id, int index, int value)
 			if (log_inter && gc->guild_id != value) {
 				int gid = (value) ? value : gc->guild_id;
 				struct guild *g = idb_get(inter_guild->guild_db, gid);
-				inter->log("guild %s (id=%d) %s castle id=%d\n",
-				          (g) ? g->name : "??", gid, (value) ? "occupy" : "abandon", castle_id);
+				inter->log("Clan %s (id=%d) %s Castelo id=%d\n",
+				          (g) ? g->name : "??", gid, (value) ? "ocupado" : "abandonado", castle_id);
 			}
 			gc->guild_id = value;
 			break;
@@ -1829,7 +1858,7 @@ int mapif_parse_GuildCastleDataSave(int fd, int castle_id, int index, int value)
 				gc->guardian[index-10].visible = value;
 				break;
 			}
-			ShowError("mapif->parse_GuildCastleDataSave: not found index=%d\n", index);
+			ShowError("mapif->parse_GuildCastleDataSave: nao encontrado index=%d\n", index);
 			return 0;
 	}
 	inter_guild->castle_tosql(gc);
@@ -1869,7 +1898,7 @@ int mapif_parse_GuildMasterChange(int fd, int guild_id, const char* name, int le
 	if (len < NAME_LENGTH)
 		g->master[len] = '\0';
 
-	ShowInfo("int_guild: Guildmaster Changed to %s (Guild %d - %s)\n",g->master, guild_id, g->name);
+	ShowInfo("int_guild: Lider do clan alterado para %s (Clan %d - %s)\n",g->master, guild_id, g->name);
 	g->save_flag |= (GS_BASIC|GS_MEMBER); //Save main data and member data.
 	return mapif->guild_master_changed(g, g->member[0].account_id, g->member[0].char_id);
 }
@@ -1913,7 +1942,7 @@ int inter_guild_parse_frommap(int fd)
 //Leave request from the server (for deleting character from guild)
 int inter_guild_leave(int guild_id, int account_id, int char_id)
 {
-	return mapif->parse_GuildLeave(-1, guild_id, account_id, char_id, 0, "** Character Deleted **");
+	return mapif->parse_GuildLeave(-1, guild_id, account_id, char_id, 0, "** Personagem deletado **");
 }
 
 int inter_guild_broken(int guild_id)

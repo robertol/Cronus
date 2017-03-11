@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "mapreg.h"
 
@@ -11,7 +35,7 @@
 #include "common/cbasetypes.h"
 #include "common/db.h"
 #include "common/ers.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/showmsg.h"
 #include "common/sql.h"
 #include "common/strlib.h"
@@ -21,6 +45,7 @@
 #include <string.h>
 
 struct mapreg_interface mapreg_s;
+struct mapreg_interface *mapreg;
 
 #define MAPREG_AUTOSAVE_INTERVAL (300*1000)
 
@@ -199,7 +224,7 @@ void script_load_mapreg(void) {
 
 
 		if( i64db_exists(mapreg->regs.vars, reference_uid(s, i)) ) {
-			ShowWarning("load_mapreg: duplicate! '%s' => '%s' skipping...\n",varname,value);
+			ShowWarning("load_mapreg: duplicado! '%s' => '%s' pulando...\n",varname,value);
 			continue;
 		}
 		if( varname[length-1] == '$' ) {
@@ -367,5 +392,4 @@ void mapreg_defaults(void) {
 	mapreg->destroyreg = mapreg_destroyreg;
 	mapreg->reload = mapreg_reload;
 	mapreg->config_read = mapreg_config_read;
-
 }

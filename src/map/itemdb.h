@@ -1,18 +1,42 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_ITEMDB_H
 #define MAP_ITEMDB_H
 
 /* #include "map/map.h" */
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/conf.h"
 #include "common/db.h"
 #include "common/mmo.h" // ITEM_NAME_LENGTH
-#include "common/sql.h"
 
 struct script_code;
+struct hplugin_data_store;
 
 /**
  * Defines
@@ -48,6 +72,7 @@ enum item_itemid {
 	ITEMID_BRANCH_OF_DEAD_TREE   = 604,
 	ITEMID_ANODYNE               = 605,
 	ITEMID_ALOEBERA              = 606,
+	ITEMID_SPECTACLES            = 611,
 	ITEMID_EMPTY_BOTTLE          = 713,
 	ITEMID_EMPERIUM              = 714,
 	ITEMID_YELLOW_GEMSTONE       = 715,
@@ -113,6 +138,7 @@ enum item_itemid {
 	ITEMID_MAGIC_CASTLE          = 12308,
 	ITEMID_BULGING_HEAD          = 12309,
 	ITEMID_THICK_MANUAL50        = 12312,
+	ITEMID_N_MAGNIFIER           = 12325,
 	ITEMID_ANCILLA               = 12333,
 	ITEMID_REPAIR_A              = 12392,
 	ITEMID_REPAIR_B              = 12393,
@@ -488,10 +514,7 @@ struct item_data {
 	/* TODO add a pointer to some sort of (struct extra) and gather all the not-common vals into it to save memory */
 	struct item_group *group;
 	struct item_package *package;
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 #define itemdb_name(n)        (itemdb->search(n)->name)
@@ -604,10 +627,8 @@ struct itemdb_interface {
 	int (*gendercheck) (struct item_data *id);
 	int (*validate_entry) (struct item_data *entry, int n, const char *source);
 	void (*readdb_additional_fields) (int itemid, config_setting_t *it, int n, const char *source);
-	int (*readdb_sql_sub) (Sql *handle, int n, const char *source);
 	int (*readdb_libconfig_sub) (config_setting_t *it, int n, const char *source);
 	int (*readdb_libconfig) (const char *filename);
-	int (*readdb_sql) (const char *tablename);
 	uint64 (*unique_id) (struct map_session_data *sd);
 	void (*read) (bool minimal);
 	void (*destroy_item_data) (struct item_data *self, int free_self);
@@ -618,10 +639,10 @@ struct itemdb_interface {
 	bool (*lookup_const) (const config_setting_t *it, const char *name, int *value);
 };
 
-struct itemdb_interface *itemdb;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void itemdb_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct itemdb_interface *itemdb;
 
 #endif /* MAP_ITEMDB_H */

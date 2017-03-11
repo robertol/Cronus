@@ -1,17 +1,37 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_SHOWMSG_H
 #define COMMON_SHOWMSG_H
 
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 
-#ifdef HERCULES_CORE
-#	include <libconfig/libconfig.h>
-#else
-#	include "common/HPMi.h"
-#endif
+#include <libconfig/libconfig.h>
 
 #include <stdarg.h>
 
@@ -90,35 +110,48 @@ enum msg_type {
 	MSG_FATALERROR
 };
 
-#ifdef HERCULES_CORE
-extern int stdout_with_ansisequence; //If the color ANSI sequences are to be used. [flaviojs]
-extern int msg_silent; //Specifies how silent the console is. [Skotlex]
-extern int console_msg_log; //Specifies what error messages to log. [Ind]
-extern char timestamp_format[20]; //For displaying Timestamps [Skotlex]
+struct showmsg_interface {
+	bool stdout_with_ansisequence; //If the color ANSI sequences are to be used. [flaviojs]
+	int silent; //Specifies how silent the console is. [Skotlex]
+	int console_log; //Specifies what error messages to log. [Ind]
+	char timestamp_format[20]; //For displaying Timestamps [Skotlex]
 
-extern void ClearScreen(void);
-extern int vShowMessage_(enum msg_type flag, const char *string, va_list ap);
+	void (*init) (void);
+	void (*final) (void);
 
-	extern void ShowMessage(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowStatus(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowSQL(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowInfo(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowNotice(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowWarning(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowDebug(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowError(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowFatalError(const char *, ...) __attribute__((format(printf, 1, 2)));
-	extern void ShowConfigWarning(config_setting_t *config, const char *string, ...) __attribute__((format(printf, 2, 3)));
-#else
-	HPExport void (*ShowMessage) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowStatus) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowSQL) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowInfo) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowNotice) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowWarning) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowDebug) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowError) (const char *, ...) __attribute__((format(printf, 1, 2)));
-	HPExport void (*ShowFatalError) (const char *, ...) __attribute__((format(printf, 1, 2)));
-#endif
+	void (*clearScreen) (void);
+	int (*showMessageV) (const char *string, va_list ap);
+
+	void (*showMessage) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showStatus) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showSQL) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showInfo) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showNotice) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showWarning) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showDebug) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showError) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showFatalError) (const char *, ...) __attribute__((format(printf, 1, 2)));
+	void (*showConfigWarning) (config_setting_t *config, const char *string, ...) __attribute__((format(printf, 2, 3)));
+};
+
+/* the purpose of these macros is simply to not make calling them be an annoyance */
+#define ClearScreen() (showmsg->clearScreen())
+#define vShowMessage(fmt, list) (showmsg->showMessageV((fmt), (list)))
+#define ShowMessage(fmt, ...) (showmsg->showMessage((fmt), ##__VA_ARGS__))
+#define ShowStatus(fmt, ...) (showmsg->showStatus((fmt), ##__VA_ARGS__))
+#define ShowSQL(fmt, ...) (showmsg->showSQL((fmt), ##__VA_ARGS__))
+#define ShowInfo(fmt, ...) (showmsg->showInfo((fmt), ##__VA_ARGS__))
+#define ShowNotice(fmt, ...) (showmsg->showNotice((fmt), ##__VA_ARGS__))
+#define ShowWarning(fmt, ...) (showmsg->showWarning((fmt), ##__VA_ARGS__))
+#define ShowDebug(fmt, ...) (showmsg->showDebug((fmt), ##__VA_ARGS__))
+#define ShowError(fmt, ...) (showmsg->showError((fmt), ##__VA_ARGS__))
+#define ShowFatalError(fmt, ...) (showmsg->showFatalError((fmt), ##__VA_ARGS__))
+#define ShowConfigWarning(config, fmt, ...) (showmsg->showConfigWarning((config), (fmt), ##__VA_ARGS__))
+
+#ifdef CRONUS_CORE
+void showmsg_defaults(void);
+#endif // CRONUS_CORE
+
+HPShared struct showmsg_interface *showmsg;
 
 #endif /* COMMON_SHOWMSG_H */

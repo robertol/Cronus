@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_ATCOMMAND_H
 #define MAP_ATCOMMAND_H
 
 #include "map/pc_groups.h"
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/conf.h"
 #include "common/db.h"
 
@@ -23,10 +47,8 @@ struct block_list;
  * Defines
  **/
 #define ATCOMMAND_LENGTH 50
-#define MAX_MSG 1500
+#define MAX_MSG 1613
 #define msg_txt(idx) atcommand->msg(idx)
-#define msg_sd(sd,msg_number) atcommand->msgsd((sd),(msg_number))
-#define msg_fd(fd,msg_number) atcommand->msgfd((fd),(msg_number))
 
 /**
  * Enumerations
@@ -80,12 +102,8 @@ struct atcommand_interface {
 	/* other vars */
 	DBMap* db; //name -> AtCommandInfo
 	DBMap* alias_db; //alias -> AtCommandInfo
-	/**
-	 * msg_table[lang_id][msg_id]
-	 * Server messages (0-499 reserved for GM commands, 500-999 reserved for others)
-	 **/
-	char*** msg_table;
-	uint8 max_message_table;
+	/* */
+	char* msg_table[MAX_MSG]; // Server messages (0-499 reserved for GM commands, 500-999 reserved for others)
 	/* */
 	void (*init) (bool minimal);
 	void (*final) (void);
@@ -114,6 +132,8 @@ struct atcommand_interface {
 	void (*get_jail_time) (int jailtime, int* year, int* month, int* day, int* hour, int* minute);
 	int (*cleanfloor_sub) (struct block_list *bl, va_list ap);
 	int (*mutearea_sub) (struct block_list *bl,va_list ap);
+	void (*getring) (struct map_session_data* sd);
+	void (*channel_help) (int fd, const char *command, bool can_create);
 	/* */
 	void (*commands_sub) (struct map_session_data* sd, const int fd, AtCommandType type);
 	void (*cmd_db_clear) (void);
@@ -122,18 +142,16 @@ struct atcommand_interface {
 	void (*base_commands) (void);
 	bool (*add) (char *name, AtCommandFunc func, bool replace);
 	const char* (*msg) (int msg_number);
-	void (*expand_message_table) (void);
-	const char* (*msgfd) (int fd, int msg_number);
-	const char* (*msgsd) (struct map_session_data *sd, int msg_number);
 };
 
-struct atcommand_interface *atcommand;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void atcommand_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct atcommand_interface *atcommand;
 
 /* stay here */
-#define ACMD(x) static bool atcommand_ ## x (const int fd, struct map_session_data* sd, const char* command, const char* message, struct AtCommandInfo *info)
+#define ACMD(x) static bool atcommand_ ## x (const int fd, struct map_session_data* sd, const char* command, const char* message, struct AtCommandInfo *info) __attribute__((nonnull (2, 3, 4, 5))); \
+    static bool atcommand_ ## x (const int fd, struct map_session_data* sd, const char* command, const char* message, struct AtCommandInfo *info)
 
 #endif /* MAP_ATCOMMAND_H */

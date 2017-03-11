@@ -1,11 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_CORE_H
 #define COMMON_CORE_H
 
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
+#include "common/db.h"
 
 /* so that developers with --enable-debug can raise signals from any section of the code they'd like */
 #ifdef DEBUG
@@ -28,27 +53,6 @@ enum E_CORE_ST {
 	CORE_ST_LAST
 };
 
-#ifdef HERCULES_CORE
-extern int arg_c;
-extern char **arg_v;
-
-/// @see E_CORE_ST
-extern int runflag;
-extern char *SERVER_NAME;
-
-enum server_types SERVER_TYPE;
-
-extern void cmdline_args_init_local(void);
-extern int do_init(int,char**);
-extern void set_server_type(void);
-extern void do_abort(void);
-extern int do_final(void);
-
-/// Called when a terminate signal is received. (Ctrl+C pressed)
-/// If NULL, runflag is set to CORE_ST_STOP instead.
-extern void (*shutdown_callback)(void);
-#endif // HERCULES_CORE
-
 /// Options for command line argument handlers.
 enum cmdline_options {
 	CMDLINE_OPT_NORMAL         = 0x0, ///< No special options.
@@ -67,8 +71,7 @@ struct CmdlineArgData {
 };
 
 struct cmdline_interface {
-	struct CmdlineArgData *args_data;
-	int args_data_count;
+	VECTOR_DECL(struct CmdlineArgData) args_data;
 
 	void (*init) (void);
 	void (*final) (void);
@@ -78,10 +81,30 @@ struct cmdline_interface {
 	const char *(*arg_source) (struct CmdlineArgData *arg);
 };
 
-struct cmdline_interface *cmdline;
+struct core_interface {
+	int arg_c;
+	char **arg_v;
+	/// @see E_CORE_ST
+	int runflag;
+	char *server_name;
+	enum server_types server_type;
+
+	/// Called when a terminate signal is received. (Ctrl+C pressed)
+	/// If NULL, runflag is set to CORE_ST_STOP instead.
+	void (*shutdown_callback)(void);
+};
 
 #define CMDLINEARG(x) bool cmdline_arg_ ## x (const char *name, const char *params)
-#ifdef HERCULES_CORE
+#define SERVER_NAME (core->server_name)
+#define SERVER_TYPE (core->server_type)
+
+#ifdef CRONUS_CORE
+extern void cmdline_args_init_local(void);
+extern int do_init(int,char**);
+extern void set_server_type(void);
+extern void do_abort(void);
+extern int do_final(void);
+
 /// Special plugin ID assigned to the Hercules core
 #define HPM_PID_CORE ((unsigned int)-1)
 
@@ -89,6 +112,9 @@ struct cmdline_interface *cmdline;
 #define CMDLINEARG_DEF2(name, funcname, help, options) cmdline->arg_add(HPM_PID_CORE, "--" EXPAND_AND_QUOTE(name), '\0', cmdline_arg_ ## funcname, help, options)
 
 void cmdline_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct core_interface *core;
+HPShared struct cmdline_interface *cmdline;
 
 #endif /* COMMON_CORE_H */

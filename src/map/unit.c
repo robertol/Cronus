@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // RENEWAL_CAST
 #include "unit.h"
@@ -34,7 +58,7 @@
 #include "map/vending.h"
 #include "common/HPM.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/nullpo.h"
 #include "common/random.h"
 #include "common/showmsg.h"
@@ -49,6 +73,7 @@ const short dirx[8]={0,-1,-1,-1,0,1,1,1};
 const short diry[8]={1,1,0,-1,-1,-1,0,1};
 
 struct unit_interface unit_s;
+struct unit_interface *unit;
 
 /**
  * Returns the unit_data for the given block_list. If the object is using
@@ -97,11 +122,11 @@ int unit_walktoxy_sub(struct block_list *bl)
 
 	memset(&wpd, 0, sizeof(wpd));
 
-	if( !path->search(&wpd,bl->m,bl->x,bl->y,ud->to_x,ud->to_y,ud->state.walk_easy,CELL_CHKNOPASS) )
+	if( !path->search(&wpd,bl,bl->m,bl->x,bl->y,ud->to_x,ud->to_y,ud->state.walk_easy,CELL_CHKNOPASS) )
 		return 0;
 
 #ifdef OFFICIAL_WALKPATH
-	if( !path->search_long(NULL, bl->m, bl->x, bl->y, ud->to_x, ud->to_y, CELL_CHKNOPASS) // Check if there is an obstacle between
+	if( !path->search_long(NULL, bl, bl->m, bl->x, bl->y, ud->to_x, ud->to_y, CELL_CHKNOPASS) // Check if there is an obstacle between
 		&& wpd.path_len > 14	// Official number of walkable cells is 14 if and only if there is an obstacle between. [malufett]
 		&& (bl->type != BL_NPC) ) // If type is a NPC, please disregard.
 			return 0;
@@ -172,7 +197,7 @@ int unit_step_timer(int tid, int64 tick, int id, intptr_t data)
 		return 0;
 
 	if(ud->steptimer != tid) {
-		ShowError("unit_step_timer mismatch %d != %d\n",ud->steptimer,tid);
+		ShowError("unit_step_timer incompativel %d != %d\n",ud->steptimer,tid);
 		return 0;
 	}
 
@@ -238,7 +263,7 @@ int unit_walktoxy_timer(int tid, int64 tick, int id, intptr_t data) {
 	if(ud == NULL) return 0;
 
 	if(ud->walktimer != tid){
-		ShowError("unit_walk_timer mismatch %d != %d\n",ud->walktimer,tid);
+		ShowError("unit_walk_timer incompativel %d != %d\n",ud->walktimer,tid);
 		return 0;
 	}
 	ud->walktimer = INVALID_TIMER;
@@ -267,13 +292,13 @@ int unit_walktoxy_timer(int tid, int64 tick, int id, intptr_t data) {
 		icewall_walk_block = 0;
 
 	//Monsters will walk into an icewall from the west and south if they already started walking
-	if(map->getcell(bl->m,x+dx,y+dy,CELL_CHKNOPASS)
-	&& (icewall_walk_block == 0 || !map->getcell(bl->m,x+dx,y+dy,CELL_CHKICEWALL) || dx < 0 || dy < 0))
+	if (map->getcell(bl->m, bl, x + dx, y + dy, CELL_CHKNOPASS)
+	    && (icewall_walk_block == 0 || !map->getcell(bl->m, bl, x + dx, y + dy, CELL_CHKICEWALL) || dx < 0 || dy < 0))
 		return unit->walktoxy_sub(bl);
 
 	//Monsters can only leave icewalls to the west and south
 	//But if movement fails more than icewall_walk_block times, they can ignore this rule
-	if(md && md->walktoxy_fail_count < icewall_walk_block && map->getcell(bl->m,x,y,CELL_CHKICEWALL) && (dx > 0 || dy > 0)) {
+	if (md && md->walktoxy_fail_count < icewall_walk_block && map->getcell(bl->m, bl, x, y, CELL_CHKICEWALL) && (dx > 0 || dy > 0)) {
 		//Needs to be done here so that rudeattack skills are invoked
 		md->walktoxy_fail_count++;
 		clif->fixpos(bl);
@@ -305,7 +330,7 @@ int unit_walktoxy_timer(int tid, int64 tick, int id, intptr_t data) {
 	if(sd) {
 		if( sd->touching_id )
 			npc->touchnext_areanpc(sd,false);
-		if(map->getcell(bl->m,x,y,CELL_CHKNPC)) {
+		if (map->getcell(bl->m, bl, x, y, CELL_CHKNPC)) {
 			npc->touch_areanpc(sd,bl->m,x,y);
 			if (bl->prev == NULL) //Script could have warped char, abort remaining of the function.
 				return 0;
@@ -337,7 +362,7 @@ int unit_walktoxy_timer(int tid, int64 tick, int id, intptr_t data) {
 	} else if (md) {
 		//Movement was successful, reset walktoxy_fail_count
 		md->walktoxy_fail_count = 0;
-		if( map->getcell(bl->m,x,y,CELL_CHKNPC) ) {
+		if (map->getcell(bl->m, bl, x, y, CELL_CHKNPC)) {
 			if( npc->touch_areanpc2(md) ) return 0; // Warped
 		} else
 			md->areanpc_id = 0;
@@ -464,6 +489,10 @@ int unit_walktoxy_timer(int tid, int64 tick, int id, intptr_t data) {
 			return unit->walktoxy(bl, x, y, 8);
 		}
 	}
+	
+	if (md && md->nd)
+		mob->script_cb( md, NULL, CB_WALKACK ); //Comunica que a caminhada foi concluída [SlexFire]
+	
 	return 0;
 }
 
@@ -493,14 +522,14 @@ int unit_walktoxy( struct block_list *bl, short x, short y, int flag)
 
 	if( ud == NULL) return 0;
 
-	if (battle_config.check_occupied_cells && (flag&8) && !map->closest_freecell(bl->m, &x, &y, BL_CHAR|BL_NPC, 1)) //This might change x and y
+	if (battle_config.check_occupied_cells && (flag&8) && !map->closest_freecell(bl->m, bl, &x, &y, BL_CHAR|BL_NPC, 1)) //This might change x and y
 		return 0;
 
-	if (!path->search(&wpd, bl->m, bl->x, bl->y, x, y, flag&1, CELL_CHKNOPASS)) // Count walk path cells
+	if (!path->search(&wpd, bl, bl->m, bl->x, bl->y, x, y, flag&1, CELL_CHKNOPASS)) // Count walk path cells
 		return 0;
 
 #ifdef OFFICIAL_WALKPATH
-	if( !path->search_long(NULL, bl->m, bl->x, bl->y, x, y, CELL_CHKNOPASS) // Check if there is an obstacle between
+	if( !path->search_long(NULL, bl, bl->m, bl->x, bl->y, x, y, CELL_CHKNOPASS) // Check if there is an obstacle between
 		&& (wpd.path_len > (battle_config.max_walk_path/17)*14) // Official number of walkable cells is 14 if and only if there is an obstacle between. [malufett]
 		&& (bl->type != BL_NPC) ) // If type is a NPC, please disregard.
 		return 0;
@@ -682,7 +711,7 @@ bool unit_run( struct block_list *bl, struct map_session_data *sd, enum sc_type 
 
 	// Search for available path
 	for(i = 0; i < AREA_SIZE; i++) {
-		if(!map->getcell(bl->m,to_x+dir_x,to_y+dir_y,CELL_CHKPASS))
+		if (!map->getcell(bl->m, bl, to_x + dir_x, to_y + dir_y, CELL_CHKPASS))
 			break;
 
 		//if sprinting and there's a PC/Mob/NPC, block the path [Kevin]
@@ -719,7 +748,7 @@ bool unit_run( struct block_list *bl, struct map_session_data *sd, enum sc_type 
 //Makes bl attempt to run dist cells away from target. Uses hard-paths.
 int unit_escape(struct block_list *bl, struct block_list *target, short dist) {
 	uint8 dir = map->calc_dir(target, bl->x, bl->y);
-	while( dist > 0 && map->getcell(bl->m, bl->x + dist*dirx[dir], bl->y + dist*diry[dir], CELL_CHKNOREACH) )
+	while (dist > 0 && map->getcell(bl->m, bl, bl->x + dist * dirx[dir], bl->y + dist * diry[dir], CELL_CHKNOREACH))
 		dist--;
 	return ( dist > 0 && unit->walktoxy(bl, bl->x + dist*dirx[dir], bl->y + dist*diry[dir], 0) );
 }
@@ -740,7 +769,7 @@ int unit_movepos(struct block_list *bl, short dst_x, short dst_y, int easy, bool
 	unit->stop_walking(bl, STOPWALKING_FLAG_FIXPOS);
 	unit->stop_attack(bl);
 
-	if( checkpath && (map->getcell(bl->m,dst_x,dst_y,CELL_CHKNOPASS) || !path->search(NULL,bl->m,bl->x,bl->y,dst_x,dst_y,easy,CELL_CHKNOREACH)) )
+	if (checkpath && (map->getcell(bl->m, bl, dst_x, dst_y, CELL_CHKNOPASS) || !path->search(NULL, bl, bl->m, bl->x, bl->y, dst_x, dst_y, easy, CELL_CHKNOREACH)) )
 		return 0; // unreachable
 
 	ud->to_x = dst_x;
@@ -763,7 +792,7 @@ int unit_movepos(struct block_list *bl, short dst_x, short dst_y, int easy, bool
 	if(sd) {
 		if( sd->touching_id )
 			npc->touchnext_areanpc(sd,false);
-		if(map->getcell(bl->m,bl->x,bl->y,CELL_CHKNPC)) {
+		if (map->getcell(bl->m, bl, bl->x, bl->y, CELL_CHKNPC)) {
 			npc->touch_areanpc(sd,bl->m,bl->x,bl->y);
 			if (bl->prev == NULL) //Script could have warped char, abort remaining of the function.
 				return 0;
@@ -774,7 +803,7 @@ int unit_movepos(struct block_list *bl, short dst_x, short dst_y, int easy, bool
 		{ // Check if pet needs to be teleported. [Skotlex]
 			int flag = 0;
 			struct block_list* pbl = &sd->pd->bl;
-			if( !checkpath && !path->search(NULL,pbl->m,pbl->x,pbl->y,dst_x,dst_y,0,CELL_CHKNOPASS) )
+			if( !checkpath && !path->search(NULL,pbl,pbl->m,pbl->x,pbl->y,dst_x,dst_y,0,CELL_CHKNOPASS) )
 				flag = 1;
 			else if (!check_distance_bl(&sd->bl, pbl, AREA_SIZE)) //Too far, teleport.
 				flag = 2;
@@ -828,7 +857,7 @@ int unit_blown(struct block_list* bl, int dx, int dy, int count, int flag)
 		sd = BL_CAST(BL_PC, bl);
 		su = BL_CAST(BL_SKILL, bl);
 
-		result = path->blownpos(bl->m, bl->x, bl->y, dx, dy, count);
+		result = path->blownpos(bl, bl->m, bl->x, bl->y, dx, dy, count);
 
 		nx = result>>16;
 		ny = result&0xffff;
@@ -865,7 +894,7 @@ int unit_blown(struct block_list* bl, int dx, int dy, int count, int flag)
 				if(sd->touching_id) {
 					npc->touchnext_areanpc(sd, false);
 				}
-				if(map->getcell(bl->m, bl->x, bl->y, CELL_CHKNPC)) {
+				if (map->getcell(bl->m, bl, bl->x, bl->y, CELL_CHKNPC)) {
 					npc->touch_areanpc(sd, bl->m, bl->x, bl->y);
 				} else {
 					npc->untouch_areanpc(sd, bl->m, bl->x, bl->y);;
@@ -914,17 +943,17 @@ int unit_warp(struct block_list *bl,short m,short x,short y,clr_type type)
 	if (x<0 || y<0) {
 		//Random map position.
 		if (!map->search_freecell(NULL, m, &x, &y, -1, -1, 1)) {
-			ShowWarning("unit_warp failed. Unit Id:%d/Type:%d, target position map %d (%s) at [%d,%d]\n", bl->id, bl->type, m, map->list[m].name, x, y);
+			ShowWarning("unit_warp falhou. Unit Id:%d/Tipo:%d, posicao alvo do mapa %d (%s) em [%d,%d]\n", bl->id, bl->type, m, map->list[m].name, x, y);
 			return 2;
 
 		}
-	} else if (map->getcell(m,x,y,CELL_CHKNOREACH)) {
+	} else if (map->getcell(m, bl, x, y, CELL_CHKNOREACH)) {
 		//Invalid target cell
-		ShowWarning("unit_warp: Specified non-walkable target cell: %d (%s) at [%d,%d]\n", m, map->list[m].name, x,y);
+		ShowWarning("unit_warp: Especificado celula alvo nao-andavel: %d (%s) em [%d,%d]\n", m, map->list[m].name, x,y);
 
 		if (!map->search_freecell(NULL, m, &x, &y, 4, 4, 1)) {
 			//Can't find a nearby cell
-			ShowWarning("unit_warp failed. Unit Id:%d/Type:%d, target position map %d (%s) at [%d,%d]\n", bl->id, bl->type, m, map->list[m].name, x, y);
+			ShowWarning("unit_warp falhou. Unit Id:%d/Tipo:%d, posicao alvo do mapa %d (%s) em [%d,%d]\n", bl->id, bl->type, m, map->list[m].name, x, y);
 			return 2;
 		}
 	}
@@ -946,6 +975,12 @@ int unit_warp(struct block_list *bl,short m,short x,short y,clr_type type)
 	map->addblock(bl);
 	clif->spawn(bl);
 	skill->unit_move(bl,timer->gettick(),1);
+	
+	if (bl->type == BL_MOB) {
+		TBL_MOB *md = (TBL_MOB *)bl;
+		if ( md->nd ) // Comunica que o mob foi teleportado [SlexFire]
+			mob->script_cb( md, NULL, CB_WARPACK );
+	}
 
 	return 0;
 }
@@ -1103,8 +1138,8 @@ int unit_can_move(struct block_list *bl) {
 	// Icewall walk block special trapped monster mode
 	if(bl->type == BL_MOB) {
 		struct mob_data *md = BL_CAST(BL_MOB, bl);
-		if(md && ((md->status.mode&MD_BOSS && battle_config.boss_icewall_walk_block == 1 && map->getcell(bl->m,bl->x,bl->y,CELL_CHKICEWALL))
-			|| (!(md->status.mode&MD_BOSS) && battle_config.mob_icewall_walk_block == 1 && map->getcell(bl->m,bl->x,bl->y,CELL_CHKICEWALL)))) {
+		if (md && ((md->status.mode&MD_BOSS && battle_config.boss_icewall_walk_block == 1 && map->getcell(bl->m, bl, bl->x, bl->y, CELL_CHKICEWALL))
+			|| (!(md->status.mode&MD_BOSS) && battle_config.mob_icewall_walk_block == 1 && map->getcell(bl->m, bl, bl->x, bl->y, CELL_CHKICEWALL)))) {
 			md->walktoxy_fail_count = 1; //Make sure rudeattacked skills are invoked
 			return 0;
 		}
@@ -1601,7 +1636,7 @@ int unit_skilluse_id2(struct block_list *src, int target_id, uint16 skill_id, ui
 			unit->setdir(src, map->calc_dir(src, target->x, target->y));
 		ud->skilltimer = timer->add( tick+casttime, skill->castend_id, src->id, 0 );
 		if( sd && (pc->checkskill(sd,SA_FREECAST) > 0 || skill_id == LG_EXEEDBREAK) )
-			status_calc_bl(&sd->bl, SCB_SPEED|SCB_ASPD);
+			status_calc_bl(&sd->bl, SCB_SPEED);
 	} else
 		skill->castend_id(ud->skilltimer,tick,src->id,0);
 
@@ -1650,14 +1685,14 @@ int unit_skilluse_pos2( struct block_list *src, short skill_x, short skill_y, ui
 		 * "WHY IS IT HEREE": ice wall cannot be canceled past this point, the client displays the animation even,
 		 * if we cancel it from castend_pos, so it has to be here for it to not display the animation.
 		 **/
-		if ( skill_id == WZ_ICEWALL && map->getcell(src->m, skill_x, skill_y, CELL_CHKNOICEWALL) )
+		if (skill_id == WZ_ICEWALL && map->getcell(src->m, src, skill_x, skill_y, CELL_CHKNOICEWALL))
 			return 0;
 	}
 
 	if (!status->check_skilluse(src, NULL, skill_id, 0))
 		return 0;
 
-	if( map->getcell(src->m, skill_x, skill_y, CELL_CHKWALL) ) {
+	if (map->getcell(src->m, src, skill_x, skill_y, CELL_CHKWALL)) {
 		// can't cast ground targeted spells on wall cells
 		if (sd) clif->skill_fail(sd,skill_id,USESKILL_FAIL_LEVEL,0);
 		return 0;
@@ -1744,9 +1779,8 @@ int unit_skilluse_pos2( struct block_list *src, short skill_x, short skill_y, ui
 	if( casttime > 0 ) {
 		unit->setdir(src, map->calc_dir(src, skill_x, skill_y));
 		ud->skilltimer = timer->add( tick+casttime, skill->castend_pos, src->id, 0 );
-		if ( (sd && pc->checkskill(sd, SA_FREECAST) > 0) || skill_id == LG_EXEEDBREAK ) {
-			status_calc_bl(&sd->bl, SCB_SPEED|SCB_ASPD);
-		}
+		if( (sd && pc->checkskill(sd,SA_FREECAST) > 0) || skill_id == LG_EXEEDBREAK)
+			status_calc_bl(&sd->bl, SCB_SPEED);
 	} else {
 		ud->skilltimer = INVALID_TIMER;
 		skill->castend_pos(ud->skilltimer,tick,src->id,0);
@@ -1764,10 +1798,10 @@ int unit_set_target(struct unit_data* ud, int target_id)
 	if (ud->target != target_id) {
 		struct unit_data * ux;
 		struct block_list* target;
-		if( ud->target && (target = map->id2bl(ud->target)) && (ux = unit->bl2ud(target)) && ux->target_count > 0 )
-			ux->target_count --;
-		if( target_id && (target = map->id2bl(target_id)) && (ux = unit->bl2ud(target)) )
-			ux->target_count ++;
+		if (ud->target && (target = map->id2bl(ud->target)) != NULL && (ux = unit->bl2ud(target)) != NULL && ux->target_count > 0)
+			--ux->target_count;
+		if (target_id && (target = map->id2bl(target_id)) != NULL && (ux = unit->bl2ud(target)) != NULL)
+			++ux->target_count;
 	}
 
 	ud->target = target_id;
@@ -1939,7 +1973,7 @@ bool unit_can_reach_pos(struct block_list *bl,int x,int y, int easy)
 	if (bl->x == x && bl->y == y) //Same place
 		return true;
 
-	return path->search(NULL,bl->m,bl->x,bl->y,x,y,easy,CELL_CHKNOREACH);
+	return path->search(NULL,bl,bl->m,bl->x,bl->y,x,y,easy,CELL_CHKNOREACH);
 }
 
 /*==========================================
@@ -1966,10 +2000,10 @@ bool unit_can_reach_bl(struct block_list *bl,struct block_list *tbl, int range, 
 	dx=(dx>0)?1:((dx<0)?-1:0);
 	dy=(dy>0)?1:((dy<0)?-1:0);
 
-	if (map->getcell(tbl->m,tbl->x-dx,tbl->y-dy,CELL_CHKNOPASS)) {
+	if (map->getcell(tbl->m, bl, tbl->x - dx, tbl->y - dy, CELL_CHKNOPASS)) {
 		int i;
 		//Look for a suitable cell to place in.
-		for(i=0;i<8 && map->getcell(tbl->m,tbl->x-dirx[i],tbl->y-diry[i],CELL_CHKNOPASS);i++);
+		for (i=0;i<8 && map->getcell(tbl->m, bl, tbl->x - dirx[i], tbl->y - diry[i], CELL_CHKNOPASS); i++);
 		if (i==8) return false; //No valid cells.
 		dx = dirx[i];
 		dy = diry[i];
@@ -1977,7 +2011,7 @@ bool unit_can_reach_bl(struct block_list *bl,struct block_list *tbl, int range, 
 
 	if (x) *x = tbl->x-dx;
 	if (y) *y = tbl->y-dy;
-	return path->search(NULL,bl->m,bl->x,bl->y,tbl->x-dx,tbl->y-dy,easy,CELL_CHKNOREACH);
+	return path->search(NULL,bl,bl->m,bl->x,bl->y,tbl->x-dx,tbl->y-dy,easy,CELL_CHKNOREACH);
 }
 /*==========================================
  * Calculates position of Pet/Mercenary/Homunculus/Elemental
@@ -2063,7 +2097,7 @@ int unit_attack_timer_sub(struct block_list* src, int tid, int64 tick) {
 	if( status->isdead(src) || status->isdead(target)
 	 || battle->check_target(src,target,BCT_ENEMY) <= 0 || !status->check_skilluse(src, target, 0, 0)
 #ifdef OFFICIAL_WALKPATH
-	 || !path->search_long(NULL, src->m, src->x, src->y, target->x, target->y, CELL_CHKWALL)
+	 || !path->search_long(NULL, src, src->m, src->x, src->y, target->x, target->y, CELL_CHKWALL)
 #endif
 	 || (sd && !pc->can_attack(sd, ud->target) )
 	)
@@ -2098,7 +2132,7 @@ int unit_attack_timer_sub(struct block_list* src, int tid, int64 tick) {
 	range = sstatus->rhw.range;
 
 	if( (unit->is_walking(target) || ud->state.step_attack)
-		&& (target->type == BL_PC || !map->getcell(target->m,target->x,target->y,CELL_CHKICEWALL)) )
+		&& (target->type == BL_PC || !map->getcell(target->m, src, target->x, target->y, CELL_CHKICEWALL)))
 		range++; // Extra range when chasing (does not apply to mobs locked in an icewall)
 
 	if(sd && !check_distance_client_bl(src,target,range)) {
@@ -2224,12 +2258,12 @@ int unit_skillcastcancel(struct block_list *bl,int type)
 	else
 		ret = timer->delete( ud->skilltimer, skill->castend_id );
 	if( ret < 0 )
-		ShowError("delete timer error %d : skill %d (%s)\n",ret,skill_id,skill->get_name(skill_id));
+		ShowError("erro ao deletar timer %d : habilidade %d (%s)\n",ret,skill_id,skill->get_name(skill_id));
 
 	ud->skilltimer = INVALID_TIMER;
 
 	if( sd && pc->checkskill(sd,SA_FREECAST) > 0 )
-		status_calc_bl(&sd->bl, SCB_SPEED|SCB_ASPD);
+		status_calc_bl(&sd->bl, SCB_SPEED);
 
 	if( sd ) {
 		switch( skill_id ) {
@@ -2267,7 +2301,7 @@ void unit_dataset(struct block_list *bl) {
 int unit_counttargeted(struct block_list* bl)
 {
 	struct unit_data* ud;
-	if( bl && (ud = unit->bl2ud(bl)) )
+	if (bl && (ud = unit->bl2ud(bl)) != NULL)
 		return ud->target_count;
 	return 0;
 }
@@ -2447,11 +2481,11 @@ int unit_remove_map(struct block_list *bl, clr_type clrtype, const char* file, i
 					sd->debug_line = 0;
 					sd->debug_func = "";
 				}
-				ShowDebug("unit_remove_map: unexpected state when removing player AID/CID:%d/%d"
+				ShowDebug("unit_remove_map: estado inesperado ao remover jogador AID/CID:%d/%d"
 					" (active=%d connect_new=%d rewarp=%d changemap=%d debug_remove_map=%d)"
-					" from map=%s (users=%d)."
-					" Previous call from %s:%d(%s), current call from %s:%d(%s)."
-					" Please report this!!!\n",
+					" do mapa=%s (usuarios=%d)."
+					" Chamada anterior de %s:%d(%s), chamada atual de %s:%d(%s)."
+					" Favor reportar isso!!!\n",
 					sd->status.account_id, sd->status.char_id,
 					sd->state.active, sd->state.connect_new, sd->state.rewarp, sd->state.changemap, sd->state.debug_remove_map,
 					map->list[bl->m].name, map->list[bl->m].users,
@@ -2653,17 +2687,7 @@ int unit_free(struct block_list *bl, clr_type clrtype) {
 				sd->quest_log = NULL;
 				sd->num_quests = sd->avail_quests = 0;
 			}
-
-			if (sd->hdata) {
-				unsigned int k;
-				for( k = 0; k < sd->hdatac; k++ ) {
-					if( sd->hdata[k]->flag.free ) {
-						aFree(sd->hdata[k]->data);
-					}
-					aFree(sd->hdata[k]);
-				}
-				aFree(sd->hdata);
-			}
+			HPM->data_store_destroy(&sd->hdata);
 			break;
 		}
 		case BL_PET:
@@ -2774,17 +2798,7 @@ int unit_free(struct block_list *bl, clr_type clrtype) {
 			if( md->tomb_nid )
 				mob->mvptomb_destroy(md);
 
-			if (md->hdata)
-			{
-				unsigned int k;
-				for (k = 0; k < md->hdatac; k++) {
-					if( md->hdata[k]->flag.free ) {
-						aFree(md->hdata[k]->data);
-					}
-					aFree(md->hdata[k]);
-				}
-				aFree(md->hdata);
-			}
+			HPM->data_store_destroy(&md->hdata);
 			break;
 		}
 		case BL_HOM:

@@ -1,13 +1,37 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_CLIF_H
 #define MAP_CLIF_H
 
 #include "map/map.h"
 #include "map/packets_struct.h"
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/mmo.h"
 
 #include <stdarg.h>
@@ -558,11 +582,6 @@ struct merge_item {
 };
 
 /**
- * Vars
- **/
-struct s_packet_db packet_db[MAX_PACKET_DB + 1];
-
-/**
  * Clif.c Interface
  **/
 struct clif_interface {
@@ -602,6 +621,7 @@ struct clif_interface {
 	int (*send_sub) (struct block_list *bl, va_list ap);
 	int (*send_actual) (int fd, void *buf, int len);
 	int (*parse) (int fd);
+	const struct s_packet_db *(*packet) (int packet_id);
 	unsigned short (*parse_cmd) ( int fd, struct map_session_data *sd );
 	unsigned short (*decrypt_cmd) ( int cmd, struct map_session_data *sd );
 	/* auth */
@@ -616,6 +636,8 @@ struct clif_interface {
 	void (*dropitem) (struct map_session_data *sd,int n,int amount);
 	void (*delitem) (struct map_session_data *sd,int n,int amount, short reason);
 	void (*takeitem) (struct block_list* src, struct block_list* dst);
+	void (*item_equip) (short idx, struct EQUIPITEM_INFO *p, struct item *i, struct item_data *id, int eqp_pos);
+	void (*item_normal) (short idx, struct NORMALITEM_INFO *p, struct item *i, struct item_data *id);
 	void (*arrowequip) (struct map_session_data *sd,int val);
 	void (*arrow_fail) (struct map_session_data *sd,int type);
 	void (*use_card) (struct map_session_data *sd,int idx);
@@ -833,13 +855,13 @@ struct clif_interface {
 	void (*clearchat) (struct chat_data *cd,int fd);
 	void (*leavechat) (struct chat_data* cd, struct map_session_data* sd, bool flag);
 	void (*changechatstatus) (struct chat_data* cd);
-	void (*wis_message) (int fd, const char* nick, const char* mes, size_t mes_len);
+	void (*wis_message) (int fd, const char* nick, const char* mes, int mes_len);
 	void (*wis_end) (int fd, int flag);
 	void (*disp_message) (struct block_list* src, const char* mes, size_t len, enum send_target target);
-	void (*broadcast) (struct block_list* bl, const char* mes, size_t len, int type, enum send_target target);
-	void (*broadcast2) (struct block_list* bl, const char* mes, size_t len, unsigned int fontColor, short fontType, short fontSize, short fontAlign, short fontY, enum send_target target);
+	void (*broadcast) (struct block_list* bl, const char* mes, uint32_t len, int type, enum send_target target);
+	void (*broadcast2) (struct block_list* bl, const char* mes, uint32_t len, unsigned int fontColor, short fontType, short fontSize, short fontAlign, short fontY, enum send_target target);
 	void (*messagecolor_self) (int fd, uint32 color, const char *msg);
-	void (*messagecolor) (struct block_list* bl, uint32 color, const char* msg);
+	void (*messagecolor) (struct block_list* bl, size_t color, const char* msg);
 	void (*disp_overhead) (struct block_list *bl, const char* mes);
 	void (*msgtable) (struct map_session_data* sd, unsigned short msg_id);
 	void (*msgtable_num) (struct map_session_data *sd, unsigned short msg_id, int value);
@@ -934,7 +956,7 @@ struct clif_interface {
 	void (*bg_hp) (struct map_session_data *sd);
 	void (*bg_xy) (struct map_session_data *sd);
 	void (*bg_xy_remove) (struct map_session_data *sd);
-	void (*bg_message) (struct battleground_data *bgd, int src_id, const char *name, const char *mes, size_t len);
+	void (*bg_message) (struct battleground_data *bgd, int src_id, const char *name, const char *mes, int len);
 	void (*bg_updatescore) (int16 m);
 	void (*bg_updatescore_single) (struct map_session_data *sd);
 	void (*sendbgemblem_area) (struct map_session_data *sd);
@@ -1320,12 +1342,18 @@ struct clif_interface {
 	/* NPC Market (by Ind after an extensive debugging of the packet, only possible thanks to Yommy <3) */
 	void (*pNPCMarketClosed) (int fd, struct map_session_data *sd);
 	void (*pNPCMarketPurchase) (int fd, struct map_session_data *sd);
+	/* */
+	void (*add_random_options) (unsigned char* buf, struct item* item);
+	void (*pHotkeyRowShift) (int fd, struct map_session_data *sd);
+	void (*pOneClick_ItemIdentify) (int fd,struct map_session_data *sd);
+	/* */
+	int (*dispbcfunc) (struct map_session_data *sd, const char* msg, unsigned int cor); //[SlexFire]
 };
 
-struct clif_interface *clif;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void clif_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct clif_interface *clif;
 
 #endif /* MAP_CLIF_H */

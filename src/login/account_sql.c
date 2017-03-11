@@ -1,15 +1,39 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "config/core.h" // CONSOLE_INPUT
 #include "account.h"
 
 #include "common/cbasetypes.h"
 #include "common/console.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -473,7 +497,7 @@ static bool account_db_sql_load_str(AccountDB* self, struct mmo_account* acc, co
 
 	if( SQL->NumRows(sql_handle) > 1 )
 	{// serious problem - duplicate account
-		ShowError("account_db_sql_load_str: multiple accounts found when retrieving data for account '%s'!\n", userid);
+		ShowError("account_db_sql_load_str: Varias contas foram encontradas ao receber os dados da conta: '%s'!\n", userid);
 		SQL->FreeResult(sql_handle);
 		return false;
 	}
@@ -731,7 +755,7 @@ void mmo_save_accreg2(AccountDB* self, int fd, int account_id, int char_id) {
 						Sql_ShowDebug(sql_handle);
 					break;
 				default:
-					ShowError("mmo_save_accreg2: DA HOO UNKNOWN TYPE %d\n",RFIFOB(fd, cursor - 1));
+					ShowError("mmo_save_accreg2: Tipo desconhecido %d\n",RFIFOB(fd, cursor - 1));
 					return;
 			}
 		}

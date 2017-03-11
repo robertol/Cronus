@@ -1,11 +1,40 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-//
-// NOTE: This file was auto-generated and should never be manually edited,
-//       as it will get overwritten.
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
+
 #ifndef HPM_DATA_CHECK_H
 #define HPM_DATA_CHECK_H
 
+#if !defined(HPMHOOKGEN)
+#include "common/HPMSymbols.inc.h"
+#endif // ! HPMHOOKGEN
+#ifdef HPM_SYMBOL
+#undef HPM_SYMBOL
+#endif // HPM_SYMBOL
 
 HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#ifdef CHAR_CHAR_H
@@ -100,6 +129,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#endif // COMMON_CONF_H
 	#ifdef COMMON_CONSOLE_H
 		{ "CParseEntry", sizeof(struct CParseEntry), SERVER_TYPE_ALL },
+		{ "console_input_interface", sizeof(struct console_input_interface), SERVER_TYPE_ALL },
 		{ "console_interface", sizeof(struct console_interface), SERVER_TYPE_ALL },
 	#else
 		#define COMMON_CONSOLE_H
@@ -107,6 +137,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#ifdef COMMON_CORE_H
 		{ "CmdlineArgData", sizeof(struct CmdlineArgData), SERVER_TYPE_ALL },
 		{ "cmdline_interface", sizeof(struct cmdline_interface), SERVER_TYPE_ALL },
+		{ "core_interface", sizeof(struct core_interface), SERVER_TYPE_ALL },
 	#else
 		#define COMMON_CORE_H
 	#endif // COMMON_CORE_H
@@ -136,16 +167,16 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#else
 		#define COMMON_HPMI_H
 	#endif // COMMON_HPMI_H
-	#ifdef COMMON_MALLOC_H
-		{ "malloc_interface", sizeof(struct malloc_interface), SERVER_TYPE_ALL },
-	#else
-		#define COMMON_MALLOC_H
-	#endif // COMMON_MALLOC_H
 	#ifdef COMMON_MAPINDEX_H
-		{ "mapindex_interface", sizeof(struct mapindex_interface), SERVER_TYPE_ALL },
+		{ "mapindex_interface", sizeof(struct mapindex_interface), SERVER_TYPE_CHAR|SERVER_TYPE_MAP },
 	#else
 		#define COMMON_MAPINDEX_H
 	#endif // COMMON_MAPINDEX_H
+	#ifdef COMMON_MEMMGR_H
+		{ "malloc_interface", sizeof(struct malloc_interface), SERVER_TYPE_ALL },
+	#else
+		#define COMMON_MEMMGR_H
+	#endif // COMMON_MEMMGR_H
 	#ifdef COMMON_MMO_H
 		{ "auction_data", sizeof(struct auction_data), SERVER_TYPE_ALL },
 		{ "fame_list", sizeof(struct fame_list), SERVER_TYPE_ALL },
@@ -185,8 +216,15 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#else
 		#define COMMON_NULLPO_H
 	#endif // COMMON_NULLPO_H
+	#ifdef COMMON_SHOWMSG_H
+		{ "showmsg_interface", sizeof(struct showmsg_interface), SERVER_TYPE_ALL },
+	#else
+		#define COMMON_SHOWMSG_H
+	#endif // COMMON_SHOWMSG_H
 	#ifdef COMMON_SOCKET_H
 		{ "hSockOpt", sizeof(struct hSockOpt), SERVER_TYPE_ALL },
+		{ "s_subnet", sizeof(struct s_subnet), SERVER_TYPE_ALL },
+		{ "s_subnet_vector", sizeof(struct s_subnet_vector), SERVER_TYPE_ALL },
 		{ "socket_data", sizeof(struct socket_data), SERVER_TYPE_ALL },
 		{ "socket_interface", sizeof(struct socket_interface), SERVER_TYPE_ALL },
 	#else
@@ -332,6 +370,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 	#ifdef MAP_HOMUNCULUS_H
 		{ "h_stats", sizeof(struct h_stats), SERVER_TYPE_MAP },
 		{ "homun_data", sizeof(struct homun_data), SERVER_TYPE_MAP },
+		{ "homun_dbs", sizeof(struct homun_dbs), SERVER_TYPE_MAP },
 		{ "homun_skill_tree_entry", sizeof(struct homun_skill_tree_entry), SERVER_TYPE_MAP },
 		{ "homunculus_interface", sizeof(struct homunculus_interface), SERVER_TYPE_MAP },
 		{ "s_homunculus_db", sizeof(struct s_homunculus_db), SERVER_TYPE_MAP },
@@ -445,6 +484,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "EQUIPITEM_INFO", sizeof(struct EQUIPITEM_INFO), SERVER_TYPE_MAP },
 		{ "EQUIPSLOTINFO", sizeof(struct EQUIPSLOTINFO), SERVER_TYPE_MAP },
 		{ "NORMALITEM_INFO", sizeof(struct NORMALITEM_INFO), SERVER_TYPE_MAP },
+		{ "RndOptions", sizeof(struct RndOptions), SERVER_TYPE_MAP },
 		{ "packet_additem", sizeof(struct packet_additem), SERVER_TYPE_MAP },
 		{ "packet_authok", sizeof(struct packet_authok), SERVER_TYPE_MAP },
 		{ "packet_banking_check", sizeof(struct packet_banking_check), SERVER_TYPE_MAP },
@@ -468,12 +508,14 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "packet_equipitem_ack", sizeof(struct packet_equipitem_ack), SERVER_TYPE_MAP },
 		{ "packet_gm_monster_item", sizeof(struct packet_gm_monster_item), SERVER_TYPE_MAP },
 		{ "packet_graffiti_entry", sizeof(struct packet_graffiti_entry), SERVER_TYPE_MAP },
+		{ "packet_hotkey", sizeof(struct packet_hotkey), SERVER_TYPE_MAP },
 		{ "packet_idle_unit", sizeof(struct packet_idle_unit), SERVER_TYPE_MAP },
 		{ "packet_idle_unit2", sizeof(struct packet_idle_unit2), SERVER_TYPE_MAP },
 		{ "packet_item_drop_announce", sizeof(struct packet_item_drop_announce), SERVER_TYPE_MAP },
 		{ "packet_itemlist_equip", sizeof(struct packet_itemlist_equip), SERVER_TYPE_MAP },
 		{ "packet_itemlist_normal", sizeof(struct packet_itemlist_normal), SERVER_TYPE_MAP },
 		{ "packet_maptypeproperty2", sizeof(struct packet_maptypeproperty2), SERVER_TYPE_MAP },
+		{ "packet_mission_info_sub", sizeof(struct packet_mission_info_sub), SERVER_TYPE_MAP },
 		{ "packet_monster_hp", sizeof(struct packet_monster_hp), SERVER_TYPE_MAP },
 		{ "packet_notify_bounditem", sizeof(struct packet_notify_bounditem), SERVER_TYPE_MAP },
 		{ "packet_npc_market_open", sizeof(struct packet_npc_market_open), SERVER_TYPE_MAP },
@@ -481,6 +523,8 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "packet_npc_market_result_ack", sizeof(struct packet_npc_market_result_ack), SERVER_TYPE_MAP },
 		{ "packet_package_item_announce", sizeof(struct packet_package_item_announce), SERVER_TYPE_MAP },
 		{ "packet_party_leader_changed", sizeof(struct packet_party_leader_changed), SERVER_TYPE_MAP },
+		{ "packet_quest_list_header", sizeof(struct packet_quest_list_header), SERVER_TYPE_MAP },
+		{ "packet_quest_list_info", sizeof(struct packet_quest_list_info), SERVER_TYPE_MAP },
 		{ "packet_roulette_close_ack", sizeof(struct packet_roulette_close_ack), SERVER_TYPE_MAP },
 		{ "packet_roulette_generate_ack", sizeof(struct packet_roulette_generate_ack), SERVER_TYPE_MAP },
 		{ "packet_roulette_info_ack", sizeof(struct packet_roulette_info_ack), SERVER_TYPE_MAP },
@@ -580,10 +624,8 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "script_retinfo", sizeof(struct script_retinfo), SERVER_TYPE_MAP },
 		{ "script_stack", sizeof(struct script_stack), SERVER_TYPE_MAP },
 		{ "script_state", sizeof(struct script_state), SERVER_TYPE_MAP },
-		{ "script_string_buf", sizeof(struct script_string_buf), SERVER_TYPE_MAP },
 		{ "script_syntax_data", sizeof(struct script_syntax_data), SERVER_TYPE_MAP },
 		{ "str_data_struct", sizeof(struct str_data_struct), SERVER_TYPE_MAP },
-		{ "string_translation", sizeof(struct string_translation), SERVER_TYPE_MAP },
 	#else
 		#define MAP_SCRIPT_H
 	#endif // MAP_SCRIPT_H
@@ -599,6 +641,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "s_skill_arrow_db", sizeof(struct s_skill_arrow_db), SERVER_TYPE_MAP },
 		{ "s_skill_changematerial_db", sizeof(struct s_skill_changematerial_db), SERVER_TYPE_MAP },
 		{ "s_skill_db", sizeof(struct s_skill_db), SERVER_TYPE_MAP },
+		{ "s_skill_dbs", sizeof(struct s_skill_dbs), SERVER_TYPE_MAP },
 		{ "s_skill_improvise_db", sizeof(struct s_skill_improvise_db), SERVER_TYPE_MAP },
 		{ "s_skill_magicmushroom_db", sizeof(struct s_skill_magicmushroom_db), SERVER_TYPE_MAP },
 		{ "s_skill_produce_db", sizeof(struct s_skill_produce_db), SERVER_TYPE_MAP },
@@ -620,6 +663,7 @@ HPExport const struct s_HPMDataCheck HPMDataCheck[] = {
 		{ "regen_data", sizeof(struct regen_data), SERVER_TYPE_MAP },
 		{ "regen_data_sub", sizeof(struct regen_data_sub), SERVER_TYPE_MAP },
 		{ "s_refine_info", sizeof(struct s_refine_info), SERVER_TYPE_MAP },
+		{ "s_status_dbs", sizeof(struct s_status_dbs), SERVER_TYPE_MAP },
 		{ "sc_display_entry", sizeof(struct sc_display_entry), SERVER_TYPE_MAP },
 		{ "status_change", sizeof(struct status_change), SERVER_TYPE_MAP },
 		{ "status_change_entry", sizeof(struct status_change_entry), SERVER_TYPE_MAP },

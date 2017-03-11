@@ -1,13 +1,37 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "geoip.h"
 
 #include "common/cbasetypes.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/showmsg.h"
 
 #include <errno.h>
@@ -17,6 +41,7 @@
 struct s_geoip geoip_data;
 
 struct geoip_interface geoip_s;
+struct geoip_interface *geoip;
 
 /* [Dekamaster/Nightroad] */
 #define GEOIP_MAX_COUNTRIES 255
@@ -84,8 +109,8 @@ const char* geoip_getcountry(uint32 ipnum)
 		}
 		offset = x;
 	}
-	ShowError("geoip_getcountry(): Error traversing database for ipnum %d\n", ipnum);
-	ShowWarning("geoip_getcountry(): Possible database corruption!\n");
+	ShowError("geoip_getcountry(): Erro ao percorrer o banco de dados pelo ipnum %d\n", ipnum);
+	ShowWarning("geoip_getcountry(): Database possivelmente corrompida!\n");
 
 	return geoip_countryname[0];
 }
@@ -103,7 +128,7 @@ void geoip_final(bool shutdown)
 
 	if (geoip->data->active) {
 		if (!shutdown)
-			ShowStatus("GeoIP "CL_RED"disabled"CL_RESET".\n");
+			ShowStatus("GeoIP "CL_RED"desabilitado"CL_RESET".\n");
 		geoip->data->active = false;
 	}
 }
@@ -123,22 +148,22 @@ void geoip_init(void)
 
 	geoip->data->active = true;
 
-	db = fopen("./db/GeoIP.dat","rb");
+	db = fopen("./db/Etc_DB/GeoIP.dat","rb"); // ** New DB **
 	if (db == NULL) {
-		ShowError("geoip_readdb: Error reading GeoIP.dat!\n");
+		ShowError("geoip_readdb: Erro na leitura do Etc_DB/GeoIP.dat!\n"); // ** New DB **
 		geoip->final(false);
 		return;
 	}
 	fno = fileno(db);
 	if (fstat(fno, &bufa) < 0) {
-		ShowError("geoip_readdb: Error stating GeoIP.dat! Error %d\n", errno);
+		ShowError("geoip_readdb: Erro ao iniciar o Etc_DB/GeoIP.dat! Erro %d\n", errno); // ** New DB **
 		fclose(db);
 		geoip->final(false);
 		return;
 	}
 	geoip->data->cache = aMalloc(sizeof(unsigned char) * bufa.st_size);
 	if (fread(geoip->data->cache, sizeof(unsigned char), bufa.st_size, db) != bufa.st_size) {
-		ShowError("geoip_cache: Couldn't read all elements!\n");
+		ShowError("geoip_cache: Nao foi possivel ler todos os elementos!\n");
 		fclose(db);
 		geoip->final(false);
 		return;
@@ -170,14 +195,14 @@ void geoip_init(void)
 
 	if (db_type != 1) {
 		if (db_type)
-			ShowError("geoip_init(): Database type is not supported %d!\n", db_type);
+			ShowError("geoip_init(): O tipo de database nao e suportado %d!\n", db_type);
 		else
-			ShowError("geoip_init(): GeoIP is corrupted!\n");
+			ShowError("geoip_init(): O GeoIP esta corrompido!\n");
 
 		geoip->final(false);
 		return;
 	}
-	ShowStatus("Finished Reading "CL_GREEN"GeoIP"CL_RESET" Database.\n");
+	ShowStatus("Leitura finalizada no banco de dados do "CL_GREEN"GeoIP"CL_RESET".\n");
 }
 
 void geoip_defaults(void)

@@ -1,11 +1,35 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_MAPINDEX_H
 #define COMMON_MAPINDEX_H
 
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/db.h"
 #include "common/mmo.h"
 
@@ -91,14 +115,14 @@ struct mapindex_interface {
 	const char* (*getmapname_ext) (const char* string, char* output);
 	/* TODO: Hello World! make up your mind, this thing is int on some places and unsigned short on others */
 	unsigned short (*name2id) (const char*);
-	const char* (*id2name) (unsigned short,const char *file, int line, const char *func);
+	const char * (*id2name) (uint16 id, const char *file, int line, const char *func);
 	bool (*check_default) (void);
 };
 
-struct mapindex_interface *mapindex;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void mapindex_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct mapindex_interface *mapindex;
 
 #endif /* COMMON_MAPINDEX_H */

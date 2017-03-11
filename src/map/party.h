@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_PARTY_H
 #define MAP_PARTY_H
 
 #include "map/map.h" // TBL_PC
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/db.h"
 #include "common/mmo.h" // struct party
 
@@ -15,7 +39,7 @@
 #define PARTY_BOOKING_JOBS 6
 #define PARTY_BOOKING_RESULTS 10
 
-struct HPluginData;
+struct hplugin_data_store;
 
 struct party_member_data {
 	struct map_session_data *sd;
@@ -35,10 +59,7 @@ struct party_data {
 		unsigned snovice :1; ///< There's a Super Novice
 		unsigned tk : 1;     ///< There's a taekwon
 	} state;
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 #define PB_NOTICE_LENGTH (36 + 1)
@@ -139,10 +160,10 @@ struct party_interface {
 	int (*db_final) (DBKey key, DBData *data, va_list ap);
 };
 
-struct party_interface *party;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void party_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct party_interface *party;
 
 #endif /* MAP_PARTY_H */

@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "pincode.h"
 
@@ -19,6 +43,7 @@
 #include <stdlib.h>
 
 struct pincode_interface pincode_s;
+struct pincode_interface *pincode;
 
 void pincode_handle (int fd, struct char_session_data* sd) {
 	struct online_char_data* character;
@@ -169,7 +194,7 @@ bool pincode_config_read(char *w1, char *w2) {
 			pincode->enabled = atoi(w2);
 #if PACKETVER < 20110309
 			if( pincode->enabled ) {
-				ShowWarning("pincode_enabled requires PACKETVER 20110309 or higher. disabling...\n");
+				ShowWarning("pincode_enabled requer PACKETVER 20110309 ou superior. Desabilitando...\n");
 				pincode->enabled = 0;
 			}
 #endif
@@ -178,7 +203,7 @@ bool pincode_config_read(char *w1, char *w2) {
 		} else if ( strcmpi(w1, "pincode_maxtry") == 0 ) {
 			pincode->maxtry = atoi(w2);
 			if( pincode->maxtry > 3 ) {
-				ShowWarning("pincode_maxtry is too high (%d); maximum allowed: 3! capping to 3...\n", pincode->maxtry);
+				ShowWarning("pincode_maxtry esta muito alto (%d); maximo permitido: 3! nivelando para 3...\n", pincode->maxtry);
 				pincode->maxtry = 3;
 			}
 		} else if ( strcmpi(w1, "pincode_charselect") == 0 ) {
@@ -212,5 +237,4 @@ void pincode_defaults(void) {
 	pincode->compare = pincode_compare;
 	pincode->check = pincode_check;
 	pincode->config_read = pincode_config_read;
-
 }

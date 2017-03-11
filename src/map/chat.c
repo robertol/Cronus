@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "chat.h"
 
-#include "map/atcommand.h" // msg_sd(sd,)
+#include "map/atcommand.h" // msg_txt()
 #include "map/battle.h" // struct battle_config
 #include "map/clif.h"
 #include "map/map.h"
@@ -14,7 +38,7 @@
 #include "map/pc.h"
 #include "map/skill.h" // ext_skill_unit_onplace()
 #include "common/cbasetypes.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -24,6 +48,7 @@
 #include <string.h>
 
 struct chat_interface chat_s;
+struct chat_interface *chat;
 
 /// Initializes a chatroom object (common functionality for both pc and npc chatrooms).
 /// Returns a chatroom object on success, or NULL on failure.
@@ -31,6 +56,9 @@ struct chat_data* chat_createchat(struct block_list* bl, const char* title, cons
 {
 	struct chat_data* cd;
 	nullpo_retr(NULL, bl);
+	nullpo_retr(NULL, title);
+	nullpo_retr(NULL, pass);
+	nullpo_retr(NULL, ev);
 
 	/* Given the overhead and the numerous instances (npc allocated or otherwise) wouldn't it be beneficial to have it use ERS? [Ind] */
 	cd = (struct chat_data *) aMalloc(sizeof(struct chat_data));
@@ -74,6 +102,8 @@ struct chat_data* chat_createchat(struct block_list* bl, const char* title, cons
 bool chat_createpcchat(struct map_session_data* sd, const char* title, const char* pass, int limit, bool pub) {
 	struct chat_data* cd;
 	nullpo_ret(sd);
+	nullpo_ret(title);
+	nullpo_ret(pass);
 
 	if( sd->chatID )
 		return false; //Prevent people abusing the chat system by creating multiple chats, as pointed out by End of Exam. [Skotlex]
@@ -84,12 +114,12 @@ bool chat_createpcchat(struct map_session_data* sd, const char* title, const cha
 	}
 
 	if( map->list[sd->bl.m].flag.nochat ) {
-		clif->message(sd->fd, msg_sd(sd,281));
+		clif->message(sd->fd, msg_txt(281));
 		return false; //Can't create chatrooms on this map.
 	}
 
-	if( map->getcell(sd->bl.m,sd->bl.x,sd->bl.y,CELL_CHKNOCHAT) ) {
-		clif->message (sd->fd, msg_sd(sd,865)); // "Can't create chat rooms in this area."
+	if (map->getcell(sd->bl.m, &sd->bl, sd->bl.x, sd->bl.y, CELL_CHKNOCHAT) ) {
+		clif->message (sd->fd, msg_txt(865)); // "Can't create chat rooms in this area."
 		return false;
 	}
 
@@ -117,6 +147,7 @@ bool chat_joinchat(struct map_session_data* sd, int chatid, const char* pass) {
 	struct chat_data* cd;
 
 	nullpo_ret(sd);
+	nullpo_ret(pass);
 	cd = (struct chat_data*)map->id2bl(chatid);
 
 	if( cd == NULL || cd->bl.type != BL_CHAT || cd->bl.m != sd->bl.m || sd->state.vending || sd->state.buyingstore || sd->chatID || ((cd->owner->type == BL_NPC) ? cd->users+1 : cd->users) >= cd->limit )
@@ -254,6 +285,7 @@ bool chat_changechatowner(struct map_session_data* sd, const char* nextownername
 	int i;
 
 	nullpo_ret(sd);
+	nullpo_ret(nextownername);
 
 	cd = (struct chat_data*)map->id2bl(sd->chatID);
 	if( cd == NULL || (struct block_list*) sd != cd->owner )
@@ -297,6 +329,8 @@ bool chat_changechatstatus(struct map_session_data* sd, const char* title, const
 	struct chat_data* cd;
 
 	nullpo_ret(sd);
+	nullpo_ret(title);
+	nullpo_ret(pass);
 
 	cd = (struct chat_data*)map->id2bl(sd->chatID);
 	if( cd==NULL || (struct block_list *)sd != cd->owner )
@@ -324,6 +358,7 @@ bool chat_kickchat(struct map_session_data* sd, const char* kickusername) {
 	int i;
 
 	nullpo_ret(sd);
+	nullpo_ret(kickusername);
 
 	cd = (struct chat_data *)map->id2bl(sd->chatID);
 
@@ -352,12 +387,12 @@ bool chat_createnpcchat(struct npc_data* nd, const char* title, int limit, bool 
 	nullpo_ret(nd);
 
 	if( nd->chat_id ) {
-		ShowError("chat_createnpcchat: npc '%s' already has a chatroom, cannot create new one!\n", nd->exname);
+		ShowError("chat_createnpcchat: npc '%s' ja possui uma sala de chat, nao e possivel criar outra!\n", nd->exname);
 		return false;
 	}
 
 	if( zeny > MAX_ZENY || maxLvl > MAX_LEVEL ) {
-		ShowError("chat_createnpcchat: npc '%s' has a required lvl or amount of zeny over the max limit!\n", nd->exname);
+		ShowError("chat_createnpcchat: npc '%s' tem um lvl exigido ou quantidade de zeny acima do limite maximo!\n", nd->exname);
 		return false;
 	}
 

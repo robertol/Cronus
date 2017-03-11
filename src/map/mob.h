@@ -1,6 +1,30 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_MOB_H
 #define MAP_MOB_H
@@ -8,8 +32,10 @@
 #include "map/map.h" // struct block_list
 #include "map/status.h" // struct status_data, struct status_change
 #include "map/unit.h" // struct unit_data, view_data
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/mmo.h" // struct item
+
+struct hplugin_data_store;
 
 #define MAX_RANDOMMONSTER 5
 
@@ -36,6 +62,17 @@
 // These define the range of available IDs for clones. [Valaris]
 #define MOB_CLONE_START (MAX_MOB_DB-999)
 #define MOB_CLONE_END MAX_MOB_DB
+
+// Scripted Mob AI Constants
+#define CB_NPCCLICK	0x100		// 256
+#define CB_ATTACK		0x80 	// 128
+#define CB_DETECT		0x40 	// 64
+#define CB_DEAD		0x20 		// 32
+#define	CB_AUXILIAR		0x10 	// 16
+#define CB_KILL		0x08 		// 8
+#define CB_DESBLOQUEAR		0x04// 4
+#define CB_WALKACK	0x02 		// 2
+#define CB_WARPACK	0x01 		// 1
 
 //Used to determine default enemy type of mobs (for use in each in range calls)
 #define DEFAULT_ENEMY_TYPE(md) ((md)->special_state.ai != AI_NONE ?BL_CHAR:BL_MOB|BL_PC|BL_HOM|BL_MER)
@@ -138,10 +175,7 @@ struct mob_db {
 	int maxskill;
 	struct mob_skill skill[MAX_MOBSKILL];
 	struct spawn_info spawn[10];
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 struct mob_data {
@@ -162,6 +196,8 @@ struct mob_data {
 		unsigned int steal_coin_flag : 1;
 		unsigned int soul_change_flag : 1; // Celest
 		unsigned int alchemist: 1;
+		unsigned int no_rand_walk: 1; //SlexFire
+		unsigned int killer: 1; //SlexFire
 		unsigned int spotted: 1;
 		unsigned int npc_killmonster: 1; //for new killmonster behavior
 		unsigned int rebirth: 1; // NPC_Rebirth used
@@ -195,6 +231,10 @@ struct mob_data {
 
 	int deletetimer;
 	int master_id,master_dist;
+	
+	// AI MOB [SlexFire]
+	TBL_NPC *nd;
+	unsigned short cb_flag; //Flag/Retorno
 
 	int8 skill_idx;// key of array
 	int64 skilldelay[MAX_MOBSKILL];
@@ -208,12 +248,8 @@ struct mob_data {
 	 * MvP Tombstone NPC ID
 	 **/
 	int tomb_nid;
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
-
 
 
 enum {
@@ -272,8 +308,8 @@ struct item_drop_list {
 #define mob_stop_walking(md, type) (unit->stop_walking(&(md)->bl, (type)))
 #define mob_stop_attack(md)        (unit->stop_attack(&(md)->bl))
 
-#define mob_is_battleground(md) ( map->list[(md)->bl.m].flag.battleground && ((md)->class_ == MOBID_BARRICADE2 || ((md)->class_ >= MOBID_FOOD_STOR && (md)->class_ <= MOBID_PINK_CRYST)) )
-#define mob_is_gvg(md) (map->list[(md)->bl.m].flag.gvg_castle && ( (md)->class_ == MOBID_EMPERIUM || (md)->class_ == MOBID_BARRICADE1 || (md)->class_ == MOBID_GUARIDAN_STONE1 || (md)->class_ == MOBID_GUARIDAN_STONE2) )
+#define mob_is_battleground(md) (map->list[(md)->bl.m].flag.battleground && ((md)->class_ == MOBID_BARRICADE2 || ((md)->class_ >= MOBID_FOOD_STOR && (md)->class_ <= MOBID_PINK_CRYST)))
+#define mob_is_gvg(md) (map->list[(md)->bl.m].flag.gvg_castle && ( (md)->class_ == MOBID_EMPERIUM || (md)->class_ == MOBID_BARRICADE1 || (md)->class_ == MOBID_GUARIDAN_STONE1 || (md)->class_ == MOBID_GUARIDAN_STONE2))
 #define mob_is_treasure(md) (((md)->class_ >= MOBID_TREAS01 && (md)->class_ <= MOBID_TREAS40) || ((md)->class_ >= MOBID_TREAS41 && (md)->class_ <= MOBID_TREAS49))
 
 struct mob_interface {
@@ -368,10 +404,16 @@ struct mob_interface {
 	int (*clone_delete) (struct mob_data *md);
 	unsigned int (*drop_adjust) (int baserate, int rate_adjust, unsigned short rate_min, unsigned short rate_max);
 	void (*item_dropratio_adjust) (int nameid, int mob_id, int *rate_adjust);
-	bool (*parse_dbrow) (char **str);
-	bool (*readdb_sub) (char *fields[], int columns, int current);
 	void (*readdb) (void);
-	int (*read_sqldb) (void);
+	bool (*lookup_const) (const config_setting_t *it, const char *name, int *value);
+	bool (*get_const) (const config_setting_t *it, int *value);
+	int (*read_libconfig) (const char *filename, bool ignore_missing);
+	void (*read_db_additional_fields) (struct mob_db *entry, int class_, config_setting_t *it, int n, const char *source);
+	bool (*read_db_sub) (config_setting_t *mobt, int id, const char *source);
+	void (*read_db_drops_sub) (struct mob_db *entry, struct status_data *mstatus, int class_, config_setting_t *t);
+	void (*read_db_mvpdrops_sub) (struct mob_db *entry, struct status_data *mstatus, int class_, config_setting_t *t);
+	int (*read_db_mode_sub) (struct mob_db *entry, struct status_data *mstatus, int class_, config_setting_t *t);
+	void (*read_db_stats_sub) (struct mob_db *entry, struct status_data *mstatus, int class_, config_setting_t *t);
 	void (*name_constants) (void);
 	bool (*readdb_mobavail) (char *str[], int columns, int current);
 	int (*read_randommonster) (void);
@@ -379,18 +421,19 @@ struct mob_interface {
 	void (*readchatdb) (void);
 	bool (*parse_row_mobskilldb) (char **str, int columns, int current);
 	void (*readskilldb) (void);
-	int (*read_sqlskilldb) (void);
 	bool (*readdb_race2) (char *fields[], int columns, int current);
 	bool (*readdb_itemratio) (char *str[], int columns, int current);
 	void (*load) (bool minimal);
 	void (*clear_spawninfo) ();
 	void (*destroy_mob_db) (int index);
+	int	(*convaux) (struct mob_data *md); // Manipulação de Mobs [SlexFire]
+	int (*script_cb) (struct mob_data *md, struct block_list *target, short action_type); // Manipulação de Mobs [SlexFire]
 };
 
-struct mob_interface *mob;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void mob_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct mob_interface *mob;
 
 #endif /* MAP_MOB_H */

@@ -3,10 +3,10 @@
 
 #include "config/core.h"
 
-#include "common/HPMi.h"
+#include "common/cronus.h"
 #include "common/cbasetypes.h"
 #include "common/conf.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/strlib.h"
 #include "common/timer.h"
@@ -139,10 +139,10 @@ int db2sql(config_setting_t *entry, int n, const char *source) {
 
 		// bindonequip
 		StrBuf->Printf(&buf, "'%u',", it->flag.bindonequip?1:0);
-		
+
 		// forceserial
-        StrBuf->Printf(&buf, "'%u',", it->flag.force_serial?1:0);
-		
+		StrBuf->Printf(&buf, "'%u',", it->flag.force_serial?1:0);
+
 		// buyingstore
 		StrBuf->Printf(&buf, "'%u',", it->flag.buyingstore?1:0);
 
@@ -290,11 +290,6 @@ void totable(void) {
 			"\n",tosql.db_name,tosql.db_name,tosql.db_name);
 }
 void do_db2sql(void) {
-	if( map->db_use_sql_item_db ) {
-		ShowInfo("db2sql: this should not be used with 'db_use_sql_item_db' enabled, skipping...\n");
-		return;
-	}
-
 	/* link */
 	itemdb_readdb_libconfig_sub = itemdb->readdb_libconfig_sub;
 	itemdb->readdb_libconfig_sub = db2sql;
@@ -305,13 +300,13 @@ void do_db2sql(void) {
 		return;
 	}
 
-	tosql.db_name = map->item_db_db;
+	tosql.db_name = "item_db";
 	totable();
 
 	memset(&tosql.buf, 0, sizeof(tosql.buf) );
 
 	itemdb->clear(false);
-	itemdb->readdb_libconfig("re/item_db.conf");
+	itemdb->readdb_libconfig("Item_DB/Item_RE.conf"); // [ New DB ]
 
 	fclose(tosql.fp);
 
@@ -320,11 +315,11 @@ void do_db2sql(void) {
 		return;
 	}
 
-	tosql.db_name = map->item_db_db;
+	tosql.db_name = "item_db";
 	totable();
 
 	itemdb->clear(false);
-	itemdb->readdb_libconfig("pre-re/item_db.conf");
+	itemdb->readdb_libconfig("Item_DB/Item_PRE.conf"); // [ New DB ]
 
 	fclose(tosql.fp);
 
@@ -333,11 +328,11 @@ void do_db2sql(void) {
 		return;
 	}
 
-	tosql.db_name = map->item_db2_db;
+	tosql.db_name = "item_db2";
 	totable();
 
 	itemdb->clear(false);
-	itemdb->readdb_libconfig("item_db2.conf");
+	itemdb->readdb_libconfig("ItemDB2.conf"); // [ New DB ]
 
 	fclose(tosql.fp);
 
@@ -357,21 +352,14 @@ CMDLINEARG(db2sql)
 	map->minimal = torun = true;
 	return true;
 }
-HPExport void server_preinit (void) {
-	SQL = GET_SYMBOL("SQL");
-	itemdb = GET_SYMBOL("itemdb");
-	map = GET_SYMBOL("map");
-	strlib = GET_SYMBOL("strlib");
-	iMalloc = GET_SYMBOL("iMalloc");
-	libconfig = GET_SYMBOL("libconfig");
-	StrBuf = GET_SYMBOL("StrBuf");
+HPExport void server_preinit(void) {
 
 	addArg("--db2sql",false,db2sql,NULL);
 }
-HPExport void plugin_init (void) {
+HPExport void plugin_init(void) {
 	addCPCommand("server:tools:db2sql",db2sql);
 }
-HPExport void server_online (void) {
+HPExport void server_online(void) {
 	if( torun )
 		do_db2sql();
 }

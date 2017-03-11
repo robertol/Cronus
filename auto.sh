@@ -1,20 +1,8 @@
-while true;
-	do
-	map=`ps aux | grep -v grep | grep -c map-server`
-	login=`ps aux | grep -v grep | grep -c login-server`
-	char=`ps aux | grep -v grep | grep -c char-server`
-	if [ $map -lt 1 ]
-	then
-		sh cronus desligar
-		sh cronus ligar
-	elif [ $char -lt 1 ]
-	then
-		sh cronus desligar
-		sh cronus ligar
-	elif [ $login -lt 1 ]
-	then
-		sh cronus desligar
-		sh cronus ligar
-	fi
+#!/bin/bash
+
+while true; do
+	services=`ps aux | grep -v grep | grep -cE "map-server|login-server|char-server"`
+	if [ $services -lt 3 ]; then
+		sh cronus reiniciar
 	sleep 120;
-	done
+done

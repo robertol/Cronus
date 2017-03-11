@@ -1,13 +1,37 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "sql.h"
 
 #include "common/cbasetypes.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/showmsg.h"
 #include "common/strlib.h"
 #include "common/timer.h"
@@ -24,6 +48,7 @@ int mysql_reconnect_type;
 unsigned int mysql_reconnect_count;
 
 struct sql_interface sql_s;
+struct sql_interface *SQL;
 
 /// Sql handle
 struct Sql {
@@ -35,8 +60,6 @@ struct Sql {
 	int keepalive;
 };
 
-
-
 // Column length receiver.
 // Takes care of the possible size mismatch between uint32 and unsigned long.
 struct s_column_length {
@@ -44,8 +67,6 @@ struct s_column_length {
 	unsigned long length;
 };
 typedef struct s_column_length s_column_length;
-
-
 
 /// Sql statement
 struct SqlStmt {
@@ -60,13 +81,9 @@ struct SqlStmt {
 	bool bind_columns;
 };
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 // Sql Handle
 ///////////////////////////////////////////////////////////////////////////////
-
-
 
 /// Allocates and initializes a new Sql handle.
 Sql* Sql_Malloc(void)
@@ -82,8 +99,6 @@ Sql* Sql_Malloc(void)
 	self->handle.reconnect = 1;
 	return self;
 }
-
-
 
 static int Sql_P_Keepalive(Sql* self);
 
@@ -110,8 +125,6 @@ int Sql_Connect(Sql* self, const char* user, const char* passwd, const char* hos
 	return SQL_SUCCESS;
 }
 
-
-
 /// Retrieves the timeout of the connection.
 int Sql_GetTimeout(Sql* self, uint32* out_timeout)
 {
@@ -128,8 +141,6 @@ int Sql_GetTimeout(Sql* self, uint32* out_timeout)
 	}
 	return SQL_ERROR;
 }
-
-
 
 /// Retrieves the name of the columns of a table into out_buf, with the separator after each name.
 int Sql_GetColumnNames(Sql* self, const char* table, char* out_buf, size_t buf_len, char sep)
@@ -159,8 +170,6 @@ int Sql_GetColumnNames(Sql* self, const char* table, char* out_buf, size_t buf_l
 	return SQL_SUCCESS;
 }
 
-
-
 /// Changes the encoding of the connection.
 int Sql_SetEncoding(Sql* self, const char* encoding)
 {
@@ -169,8 +178,6 @@ int Sql_SetEncoding(Sql* self, const char* encoding)
 	return SQL_ERROR;
 }
 
-
-
 /// Pings the connection.
 int Sql_Ping(Sql* self)
 {
@@ -178,8 +185,6 @@ int Sql_Ping(Sql* self)
 		return SQL_SUCCESS;
 	return SQL_ERROR;
 }
-
-
 
 /// Wrapper function for Sql_Ping.
 ///
@@ -191,8 +196,6 @@ static int Sql_P_KeepaliveTimer(int tid, int64 tick, int id, intptr_t data)
 	Sql_Ping(self);
 	return 0;
 }
-
-
 
 /// Establishes keepalive (periodic ping) on the connection.
 ///
@@ -217,8 +220,6 @@ static int Sql_P_Keepalive(Sql* self)
 	return timer->add_interval(timer->gettick() + ping_interval*1000, Sql_P_KeepaliveTimer, 0, (intptr_t)self, ping_interval*1000);
 }
 
-
-
 /// Escapes a string.
 size_t Sql_EscapeString(Sql* self, char *out_to, const char *from)
 {
@@ -228,8 +229,6 @@ size_t Sql_EscapeString(Sql* self, char *out_to, const char *from)
 		return (size_t)mysql_escape_string(out_to, from, (unsigned long)strlen(from));
 }
 
-
-
 /// Escapes a string.
 size_t Sql_EscapeStringLen(Sql* self, char *out_to, const char *from, size_t from_len)
 {
@@ -238,8 +237,6 @@ size_t Sql_EscapeStringLen(Sql* self, char *out_to, const char *from, size_t fro
 	else
 		return (size_t)mysql_escape_string(out_to, from, (unsigned long)from_len);
 }
-
-
 
 /// Executes a query.
 int Sql_Query(Sql *self, const char *query, ...) __attribute__((format(printf, 2, 3)));
@@ -253,8 +250,6 @@ int Sql_Query(Sql *self, const char *query, ...) {
 
 	return res;
 }
-
-
 
 /// Executes a query.
 int Sql_QueryV(Sql* self, const char* query, va_list args)
@@ -281,8 +276,6 @@ int Sql_QueryV(Sql* self, const char* query, va_list args)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Executes a query.
 int Sql_QueryStr(Sql* self, const char* query)
 {
@@ -308,8 +301,6 @@ int Sql_QueryStr(Sql* self, const char* query)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Returns the number of the AUTO_INCREMENT column of the last INSERT/UPDATE query.
 uint64 Sql_LastInsertId(Sql* self)
 {
@@ -319,8 +310,6 @@ uint64 Sql_LastInsertId(Sql* self)
 		return 0;
 }
 
-
-
 /// Returns the number of columns in each row of the result.
 uint32 Sql_NumColumns(Sql* self)
 {
@@ -329,8 +318,6 @@ uint32 Sql_NumColumns(Sql* self)
 	return 0;
 }
 
-
-
 /// Returns the number of rows in the result.
 uint64 Sql_NumRows(Sql* self)
 {
@@ -338,8 +325,6 @@ uint64 Sql_NumRows(Sql* self)
 		return (uint64)mysql_num_rows(self->result);
 	return 0;
 }
-
-
 
 /// Fetches the next row.
 int Sql_NextRow(Sql* self) {
@@ -355,8 +340,6 @@ int Sql_NextRow(Sql* self) {
 	}
 	return SQL_ERROR;
 }
-
-
 
 /// Gets the data of a column.
 int Sql_GetData(Sql* self, size_t col, char** out_buf, size_t* out_len)
@@ -374,8 +357,6 @@ int Sql_GetData(Sql* self, size_t col, char** out_buf, size_t* out_len)
 	return SQL_ERROR;
 }
 
-
-
 /// Frees the result of the query.
 void Sql_FreeResult(Sql* self) {
 	if( self && self->result ) {
@@ -385,8 +366,6 @@ void Sql_FreeResult(Sql* self) {
 		self->lengths = NULL;
 	}
 }
-
-
 
 /// Shows debug information (last query).
 void Sql_ShowDebug_(Sql* self, const char* debug_file, const unsigned long debug_line)
@@ -398,8 +377,6 @@ void Sql_ShowDebug_(Sql* self, const char* debug_file, const unsigned long debug
 	else
 		ShowDebug("at %s:%lu\n", debug_file, debug_line);
 }
-
-
 
 /// Frees a Sql handle returned by Sql_Malloc.
 void Sql_Free(Sql* self) {
@@ -413,13 +390,9 @@ void Sql_Free(Sql* self) {
 	}
 }
 
-
-
 ///////////////////////////////////////////////////////////////////////////////
 // Prepared Statements
 ///////////////////////////////////////////////////////////////////////////////
-
-
 
 /// Returns the mysql integer type for the target size.
 ///
@@ -437,8 +410,6 @@ static enum enum_field_types Sql_P_SizeToMysqlIntType(int sz)
 		return MYSQL_TYPE_NULL;
 	}
 }
-
-
 
 /// Binds a parameter/result.
 ///
@@ -513,8 +484,6 @@ static int Sql_P_BindSqlDataType(MYSQL_BIND* bind, enum SqlDataType buffer_type,
 	return SQL_SUCCESS;
 }
 
-
-
 /// Prints debug information about a field (type and length).
 ///
 /// @private
@@ -550,8 +519,6 @@ static void Sql_P_ShowDebugMysqlFieldInfo(const char* prefix, enum enum_field_ty
 	ShowDebug("%stype=%s%s, length=%lu%s\n", prefix, sign, type_string, length, length_postfix);
 }
 
-
-
 /// Reports debug information about a truncated column.
 ///
 /// @private
@@ -573,8 +540,6 @@ static void SqlStmt_P_ShowDebugTruncatedColumn(SqlStmt* self, size_t i)
 		Sql_P_ShowDebugMysqlFieldInfo("buffer - ", column->buffer_type, column->is_unsigned, column->buffer_length, "");
 	mysql_free_result(meta);
 }
-
-
 
 /// Allocates and initializes a new SqlStmt handle.
 SqlStmt* SqlStmt_Malloc(Sql* sql) {
@@ -603,8 +568,6 @@ SqlStmt* SqlStmt_Malloc(Sql* sql) {
 	return self;
 }
 
-
-
 /// Prepares the statement.
 int SqlStmt_Prepare(SqlStmt *self, const char *query, ...) __attribute__((format(printf, 2, 3)));
 int SqlStmt_Prepare(SqlStmt *self, const char *query, ...) {
@@ -617,8 +580,6 @@ int SqlStmt_Prepare(SqlStmt *self, const char *query, ...) {
 
 	return res;
 }
-
-
 
 /// Prepares the statement.
 int SqlStmt_PrepareV(SqlStmt* self, const char* query, va_list args)
@@ -640,8 +601,6 @@ int SqlStmt_PrepareV(SqlStmt* self, const char* query, va_list args)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Prepares the statement.
 int SqlStmt_PrepareStr(SqlStmt* self, const char* query)
 {
@@ -662,8 +621,6 @@ int SqlStmt_PrepareStr(SqlStmt* self, const char* query)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Returns the number of parameters in the prepared statement.
 size_t SqlStmt_NumParams(SqlStmt* self)
 {
@@ -672,8 +629,6 @@ size_t SqlStmt_NumParams(SqlStmt* self)
 	else
 		return 0;
 }
-
-
 
 /// Binds a parameter to a buffer.
 int SqlStmt_BindParam(SqlStmt* self, size_t idx, enum SqlDataType buffer_type, void* buffer, size_t buffer_len)
@@ -703,8 +658,6 @@ int SqlStmt_BindParam(SqlStmt* self, size_t idx, enum SqlDataType buffer_type, v
 		return SQL_SUCCESS;// out of range - ignore
 }
 
-
-
 /// Executes the prepared statement.
 int SqlStmt_Execute(SqlStmt* self)
 {
@@ -730,8 +683,6 @@ int SqlStmt_Execute(SqlStmt* self)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Returns the number of the AUTO_INCREMENT column of the last INSERT/UPDATE statement.
 uint64 SqlStmt_LastInsertId(SqlStmt* self)
 {
@@ -741,8 +692,6 @@ uint64 SqlStmt_LastInsertId(SqlStmt* self)
 		return 0;
 }
 
-
-
 /// Returns the number of columns in each row of the result.
 size_t SqlStmt_NumColumns(SqlStmt* self)
 {
@@ -751,8 +700,6 @@ size_t SqlStmt_NumColumns(SqlStmt* self)
 	else
 		return 0;
 }
-
-
 
 /// Binds the result of a column to a buffer.
 int SqlStmt_BindColumn(SqlStmt *self, size_t idx, enum SqlDataType buffer_type, void *buffer, size_t buffer_len, uint32 *out_length, int8 *out_is_null) {
@@ -795,8 +742,6 @@ int SqlStmt_BindColumn(SqlStmt *self, size_t idx, enum SqlDataType buffer_type, 
 	}
 }
 
-
-
 /// Returns the number of rows in the result.
 uint64 SqlStmt_NumRows(SqlStmt* self)
 {
@@ -805,8 +750,6 @@ uint64 SqlStmt_NumRows(SqlStmt* self)
 	else
 		return 0;
 }
-
-
 
 /// Fetches the next row.
 int SqlStmt_NextRow(SqlStmt* self)
@@ -891,16 +834,12 @@ int SqlStmt_NextRow(SqlStmt* self)
 	return SQL_SUCCESS;
 }
 
-
-
 /// Frees the result of the statement execution.
 void SqlStmt_FreeResult(SqlStmt* self)
 {
 	if( self )
 		mysql_stmt_free_result(self->stmt);
 }
-
-
 
 /// Shows debug information (with statement).
 void SqlStmt_ShowDebug_(SqlStmt* self, const char* debug_file, const unsigned long debug_line)
@@ -912,8 +851,6 @@ void SqlStmt_ShowDebug_(SqlStmt* self, const char* debug_file, const unsigned lo
 	else
 		ShowDebug("at %s:%lu\n", debug_file, debug_line);
 }
-
-
 
 /// Frees a SqlStmt returned by SqlStmt_Malloc.
 void SqlStmt_Free(SqlStmt* self)

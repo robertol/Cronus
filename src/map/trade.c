@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "trade.h"
 
@@ -25,6 +49,7 @@
 #include <string.h>
 
 struct trade_interface trade_s;
+struct trade_interface *trade;
 
 /*==========================================
  * Initiates a trade request.
@@ -34,7 +59,7 @@ void trade_traderequest(struct map_session_data *sd, struct map_session_data *ta
 	nullpo_retv(sd);
 
 	if (map->list[sd->bl.m].flag.notrade) {
-		clif->message (sd->fd, msg_sd(sd,272));
+		clif->message (sd->fd, msg_txt(272));
 		return; //Can't trade in notrade mapflag maps.
 	}
 
@@ -73,7 +98,7 @@ void trade_traderequest(struct map_session_data *sd, struct map_session_data *ta
 
 	if (!pc_can_give_items(sd) || !pc_can_give_items(target_sd)) //check if both GMs are allowed to trade
 	{
-		clif->message(sd->fd, msg_sd(sd,246));
+		clif->message(sd->fd, msg_txt(246));
 		clif->tradestart(sd, 2); // GM is not allowed to trade
 		return;
 	}
@@ -209,13 +234,13 @@ int impossible_trade_check(struct map_session_data *sd)
 			// if we block people
 			if (battle_config.ban_hack_trade < 0) {
 				chrif->char_ask_name(-1, sd->status.name, CHAR_ASK_NAME_BLOCK, 0, 0, 0, 0, 0, 0);
-				set_eof(sd->fd); // forced to disconnect because of the hack
+				sockt->eof(sd->fd); // forced to disconnect because of the hack
 				// message about the ban
 				safestrncpy(message_to_gm, msg_txt(540), sizeof(message_to_gm)); //  This player has been definitively blocked.
 			// if we ban people
 			} else if (battle_config.ban_hack_trade > 0) {
 				chrif->char_ask_name(-1, sd->status.name, CHAR_ASK_NAME_BAN, 0, 0, 0, 0, battle_config.ban_hack_trade, 0); // type: 2 - ban (year, month, day, hour, minute, second)
-				set_eof(sd->fd); // forced to disconnect because of the hack
+				sockt->eof(sd->fd); // forced to disconnect because of the hack
 				// message about the ban
 				sprintf(message_to_gm, msg_txt(507), battle_config.ban_hack_trade); //  This player has been banned for %d minute(s).
 			} else
@@ -355,14 +380,14 @@ void trade_tradeadditem(struct map_session_data *sd, short index, short amount) 
 	if( !itemdb_cantrade(item, src_lv, dst_lv) && //Can't trade
 		(pc->get_partner(sd) != target_sd || !itemdb_canpartnertrade(item, src_lv, dst_lv)) ) //Can't partner-trade
 	{
-		clif->message (sd->fd, msg_sd(sd,260));
+		clif->message (sd->fd, msg_txt(260));
 		clif->tradeitemok(sd, index+2, TIO_INDROCKS);
 		return;
 	}
 
 	if( item->expire_time )
 	{ // Rental System
-		clif->message (sd->fd, msg_sd(sd,260));
+		clif->message (sd->fd, msg_txt(260));
 		clif->tradeitemok(sd, index+2, TIO_INDROCKS);
 		return;
 	}
@@ -371,7 +396,7 @@ void trade_tradeadditem(struct map_session_data *sd, short index, short amount) 
 			!( item->bound == IBT_GUILD && sd->status.guild_id == target_sd->status.guild_id ) &&
 			!( item->bound == IBT_PARTY && sd->status.party_id == target_sd->status.party_id )
 					&& !pc_can_give_bound_items(sd) ) {
-		clif->message(sd->fd, msg_sd(sd,293));
+		clif->message(sd->fd, msg_txt(293));
 		clif->tradeitemok(sd, index+2, TIO_INDROCKS);
 		return;
 	}

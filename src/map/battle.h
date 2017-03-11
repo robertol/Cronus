@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_BATTLE_H
 #define MAP_BATTLE_H
 
 #include "map/map.h" //ELE_MAX
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 
 /**
  * Declarations
@@ -507,11 +531,9 @@ struct Battle_Config {
 	int stormgust_knockback;
 
 	int feature_roulette;
-};
 
-#ifdef HERCULES_CORE
-extern struct Battle_Config battle_config;
-#endif // HERCULES_CORE
+	int show_monster_hp_bar; // [Frost]
+};
 
 /* criteria for battle_config.idletime_critera */
 enum e_battle_config_idletime {
@@ -629,8 +651,8 @@ struct battle_interface {
 	/* - battle_config                           */
 	int (*config_read) (const char *cfgName);
 	void (*config_set_defaults) (void);
-	int (*config_set_value) (const char* w1, const char* w2);
-	int (*config_get_value) (const char* w1);
+	int (*config_set_value) (const char *w1, const char *w2);
+	bool (*config_get_value) (const char *w1, int *value);
 	void (*config_adjust) (void);
 	/* ----------------------------------------- */
 	/* picks a random enemy within the specified range */
@@ -643,10 +665,12 @@ struct battle_interface {
 	void (*calc_misc_attack_unknown) (struct block_list *src, struct block_list *target, uint16 *skill_id, uint16 *skill_lv, int *mflag, struct Damage *md);
 };
 
-struct battle_interface *battle;
+#ifdef CRONUS_CORE
+extern struct Battle_Config battle_config;
 
-#ifdef HERCULES_CORE
 void battle_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct battle_interface *battle;
 
 #endif /* MAP_BATTLE_H */

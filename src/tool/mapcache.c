@@ -1,12 +1,37 @@
-// Copyright (c) Athena Dev Teams - Licensed under GNU GPL
-// For more information, see LICENCE in the main folder
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "common/cbasetypes.h"
 #include "common/core.h"
 #include "common/grfio.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/showmsg.h"
 #include "common/strlib.h"
@@ -188,7 +213,7 @@ char *remove_extension(char *mapname)
 	char *ptr, *ptr2;
 	ptr = strchr(mapname, '.');
 	if (ptr) { //Check and remove extension.
-		while (ptr[1] && (ptr2 = strchr(ptr+1, '.')))
+		while (ptr[1] && (ptr2 = strchr(ptr+1, '.')) != NULL)
 			ptr = ptr2; //Skip to the last dot.
 		if (strcmp(ptr,".gat") == 0)
 			*ptr = '\0'; //Remove extension.
@@ -256,7 +281,6 @@ void cmdline_args_init_local(void)
 	CMDLINEARG_DEF2(map-list, maplist, "Alternative map list file", CMDLINE_OPT_NORMAL|CMDLINE_OPT_PARAM);
 	CMDLINEARG_DEF2(map-cache, mapcache, "Alternative map cache file", CMDLINE_OPT_NORMAL|CMDLINE_OPT_PARAM);
 	CMDLINEARG_DEF2(rebuild, rebuild, "Forces a rebuild of the map cache, rather than only adding missing maps", CMDLINE_OPT_NORMAL);
-	
 }
 
 int do_init(int argc, char** argv)
@@ -267,9 +291,13 @@ int do_init(int argc, char** argv)
 	char name[MAP_NAME_LENGTH_EXT];
 
 	grf_list_file = aStrdup("conf/grf-files.txt");
-	map_list_file = aStrdup("db/map_index.txt");
 	/* setup pre-defined, #define-dependant */
-	map_cache_file = aStrdup("db/"DBPATH"map_cache.dat");
+	map_list_file = aStrdup("db/Map_DB/Map_Index.txt"); // [ New DB ]
+	#ifdef RENEWAL // [ New DB ]
+		map_cache_file = aStrdup("db/Map_DB/Map_Cache_RE.dat");
+	#else
+		map_cache_file = aStrdup("db/Map_DB/Map_Cache_PRE.dat");
+	#endif
 
 	cmdline->exec(argc, argv, CMDLINE_OPT_PREINIT);
 	cmdline->exec(argc, argv, CMDLINE_OPT_NORMAL);

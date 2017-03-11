@@ -1,6 +1,30 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef COMMON_MMO_H
 #define COMMON_MMO_H
@@ -147,6 +171,8 @@
 //For Map Names, which the client considers to be 16 in length including the .gat extension.
 #define MAP_NAME_LENGTH (11 + 1)
 #define MAP_NAME_LENGTH_EXT (MAP_NAME_LENGTH + 4)
+//Tamanho do nome dos NPCs (Max 32 caracteres)
+#define NOME_NPC_LEN (31 + 1) //[SlexFire]
 
 #define MAX_FRIENDS 40
 #define MAX_MEMOPOINTS 3
@@ -198,7 +224,7 @@
 #define JOBL_BABY 0x2000  //8192
 #define JOBL_THIRD 0x4000 //16384
 
-struct HPluginData;
+struct hplugin_data_store;
 
 enum item_types {
 	IT_HEALING = 0,
@@ -299,6 +325,7 @@ enum e_mmo_charstatus_opt {
 };
 
 enum e_item_bound_type {
+	IBT_NONE      = 0x0,
 	IBT_MIN       = 0x1,
 	IBT_ACCOUNT   = 0x1,
 	IBT_GUILD     = 0x2,
@@ -333,18 +360,15 @@ enum {
 	OPTION_DRAGON5      = 0x04000000,
 	OPTION_HANBOK       = 0x08000000,
 	OPTION_OKTOBERFEST  = 0x10000000,
-	
 #ifndef NEW_CARTS
 	OPTION_CART1     = 0x00000008,
 	OPTION_CART2     = 0x00000080,
 	OPTION_CART3     = 0x00000100,
 	OPTION_CART4     = 0x00000200,
 	OPTION_CART5     = 0x00000400,
-	
 	/*  compound constant for older carts */
 	OPTION_CART      = OPTION_CART1|OPTION_CART2|OPTION_CART3|OPTION_CART4|OPTION_CART5,
 #endif
-	
 	// compound constants
 	OPTION_DRAGON    = OPTION_DRAGON1|OPTION_DRAGON2|OPTION_DRAGON3|OPTION_DRAGON4|OPTION_DRAGON5,
 	OPTION_COSTUME   = OPTION_WEDDING|OPTION_XMAS|OPTION_SUMMER|OPTION_HANBOK|OPTION_OKTOBERFEST,
@@ -533,6 +557,8 @@ struct mmo_charstatus {
 	unsigned char font;
 
 	uint32 uniqueitem_counter;
+
+	unsigned char hotkey_rowshift;
 };
 
 typedef enum mail_status {
@@ -661,10 +687,7 @@ struct guild {
 	unsigned short instances;
 
 	struct channel_data *channel;
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 struct guild_castle {
@@ -754,7 +777,6 @@ enum {
 	GD_DEVELOPMENT=10014,
 	GD_MAX,
 };
-
 
 //These mark the ID of the jobs, as expected by the client. [Skotlex]
 enum {

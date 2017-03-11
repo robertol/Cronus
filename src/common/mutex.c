@@ -1,12 +1,37 @@
-// Copyright (c) rAthena Project (www.rathena.org) - Licensed under GNU GPL
-// For more information, see LICENCE in the main folder
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "mutex.h"
 
 #include "common/cbasetypes.h" // for WIN32
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/showmsg.h"
 #include "common/timer.h"
 
@@ -25,7 +50,6 @@ struct ramutex{
 #endif
 };
 
-
 struct racond{
 #ifdef WIN32
 	HANDLE events[2];
@@ -40,13 +64,11 @@ struct racond{
 #endif
 };
 
-
 ////////////////////
 // Mutex
 //
 // Implementation:
 //
-
 
 ramutex *ramutex_create(void) {
 	struct ramutex *m;
@@ -66,7 +88,6 @@ ramutex *ramutex_create(void) {
 	return m;
 }//end: ramutex_create()
 
-
 void ramutex_destroy(ramutex *m) {
 
 #ifdef WIN32
@@ -79,7 +100,6 @@ void ramutex_destroy(ramutex *m) {
 
 }//end: ramutex_destroy()
 
-
 void ramutex_lock(ramutex *m) {
 
 #ifdef WIN32
@@ -88,7 +108,6 @@ void ramutex_lock(ramutex *m) {
 	pthread_mutex_lock(&m->hMutex);
 #endif
 }//end: ramutex_lock
-
 
 bool ramutex_trylock(ramutex *m) {
 #ifdef WIN32
@@ -104,7 +123,6 @@ bool ramutex_trylock(ramutex *m) {
 #endif
 }//end: ramutex_trylock()
 
-
 void ramutex_unlock(ramutex *m) {
 #ifdef WIN32
 	LeaveCriticalSection(&m->hMutex);
@@ -113,8 +131,6 @@ void ramutex_unlock(ramutex *m) {
 #endif
 
 }//end: ramutex_unlock()
-
-
 
 ///////////////
 // Condition Variables
@@ -143,7 +159,6 @@ racond *racond_create(void) {
 	return c;
 }//end: racond_create()
 
-
 void racond_destroy(racond *c) {
 #ifdef WIN32
 	CloseHandle( c->events[ EVENT_COND_SIGNAL ] );
@@ -156,13 +171,11 @@ void racond_destroy(racond *c) {
 	aFree(c);
 }//end: racond_destroy()
 
-
 void racond_wait(racond *c, ramutex *m, sysint timeout_ticks) {
 #ifdef WIN32
 	register DWORD ms;
 	int result;
 	bool is_last = false;
-
 
 	EnterCriticalSection(&c->waiters_lock);
 	c->nWaiters++;
@@ -191,7 +204,6 @@ void racond_wait(racond *c, ramutex *m, sysint timeout_ticks) {
 	if(is_last == true)
 		ResetEvent( c->events[EVENT_COND_BROADCAST] );
 
-
 	ramutex_lock(m);
 
 #else
@@ -210,7 +222,6 @@ void racond_wait(racond *c, ramutex *m, sysint timeout_ticks) {
 #endif
 }//end: racond_wait()
 
-
 void racond_signal(racond *c) {
 #ifdef WIN32
 #	if 0
@@ -228,7 +239,6 @@ void racond_signal(racond *c) {
 #endif
 }//end: racond_signal()
 
-
 void racond_broadcast(racond *c) {
 #ifdef WIN32
 #	if 0
@@ -245,5 +255,3 @@ void racond_broadcast(racond *c) {
 	pthread_cond_broadcast(&c->hCond);
 #endif
 }//end: racond_broadcast()
-
-

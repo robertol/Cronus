@@ -1,15 +1,39 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "int_pet.h"
 
 #include "char/char.h"
 #include "char/inter.h"
 #include "char/mapif.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/mmo.h"
 #include "common/nullpo.h"
 #include "common/showmsg.h"
@@ -22,6 +46,7 @@
 #include <stdlib.h>
 
 struct inter_pet_interface inter_pet_s;
+struct inter_pet_interface *inter_pet;
 
 //---------------------------------------------------------
 int inter_pet_tosql(int pet_id, struct s_pet* p)
@@ -59,7 +84,7 @@ int inter_pet_tosql(int pet_id, struct s_pet* p)
 	}
 
 	if (save_log)
-		ShowInfo("Pet saved %d - %s.\n", pet_id, p->name);
+		ShowInfo("Pet salvo %d - %s.\n", pet_id, p->name);
 	return 1;
 }
 
@@ -69,7 +94,7 @@ int inter_pet_fromsql(int pet_id, struct s_pet* p)
 	size_t len;
 
 #ifdef NOISY
-	ShowInfo("Loading pet (%d)...\n",pet_id);
+	ShowInfo("Carregando pet (%d)...\n",pet_id);
 #endif
 	nullpo_ret(p);
 	memset(p, 0, sizeof(struct s_pet));
@@ -103,7 +128,7 @@ int inter_pet_fromsql(int pet_id, struct s_pet* p)
 		p->intimate = cap_value(p->intimate, 0, 1000);
 
 		if( save_log )
-			ShowInfo("Pet loaded (%d - %s).\n", pet_id, p->name);
+			ShowInfo("Pets carregados (%d - %s).\n", pet_id, p->name);
 	}
 	return 0;
 }
@@ -120,7 +145,7 @@ void inter_pet_sql_final(void) {
 }
 //----------------------------------
 int inter_pet_delete(int pet_id) {
-	ShowInfo("delete pet request: %d...\n",pet_id);
+	ShowInfo("Requisicao para exclusao do pet: %d...\n",pet_id);
 
 	if( SQL_ERROR == SQL->Query(inter->sql_handle, "DELETE FROM `%s` WHERE `pet_id`='%d'", pet_db, pet_id) )
 		Sql_ShowDebug(inter->sql_handle);
@@ -135,7 +160,7 @@ int mapif_pet_created(int fd, int account_id, struct s_pet *p)
 	if(p!=NULL){
 		WFIFOW(fd, 6) = p->class_;
 		WFIFOL(fd, 8) = p->pet_id;
-		ShowInfo("int_pet: created pet %d - %s\n", p->pet_id, p->name);
+		ShowInfo("int_pet: Pet criado %d - %s\n", p->pet_id, p->name);
 	}else{
 		WFIFOB(fd, 6) = 0;
 		WFIFOL(fd, 8) = 0;
@@ -262,7 +287,7 @@ int mapif_save_pet(int fd, int account_id, struct s_pet *data)
 	RFIFOHEAD(fd);
 	len=RFIFOW(fd, 2);
 	if (sizeof(struct s_pet) != len-8) {
-		ShowError("inter pet: data size mismatch: %d != %"PRIuS"\n", len-8, sizeof(struct s_pet));
+		ShowError("inter pet: Incompatibilidade no tamanho dos dados: %d != %"PRIuS"\n", len-8, sizeof(struct s_pet));
 		return 0;
 	}
 

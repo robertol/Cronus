@@ -1,8 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "storage.h"
 
@@ -18,7 +42,7 @@
 #include "map/pc.h"
 #include "common/cbasetypes.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/nullpo.h"
 
 #include <stdio.h>
@@ -27,6 +51,9 @@
 
 struct storage_interface storage_s;
 struct guild_storage_interface gstorage_s;
+
+struct storage_interface *storage;
+struct guild_storage_interface *gstorage;
 
 /*==========================================
  * Sort items in the warehouse
@@ -88,7 +115,7 @@ int storage_storageopen(struct map_session_data *sd)
 
 	if( !pc_can_give_items(sd) ) {
 		//check is this GM level is allowed to put items to storage
-		clif->message(sd->fd, msg_sd(sd,246));
+		clif->message(sd->fd, msg_txt(246));
 		return 1;
 	}
 
@@ -139,12 +166,12 @@ int storage_additem(struct map_session_data* sd, struct item* item_data, int amo
 
 	if (!itemdb_canstore(item_data, pc_get_group_level(sd))) {
 		//Check if item is storable. [Skotlex]
-		clif->message (sd->fd, msg_sd(sd,264));
+		clif->message (sd->fd, msg_txt(264));
 		return 1;
 	}
 
 	if( item_data->bound > IBT_ACCOUNT && !pc_can_give_bound_items(sd) ) {
-		clif->message(sd->fd, msg_sd(sd,294));
+		clif->message(sd->fd, msg_txt(294));
 		return 1;
 	}
 
@@ -388,7 +415,7 @@ int storage_guild_storageopen(struct map_session_data* sd)
 		return 1; //Can't open both storages at a time.
 
 	if( !pc_can_give_items(sd) ) { //check is this GM level can open guild storage and store items [Lupus]
-		clif->message(sd->fd, msg_sd(sd,246));
+		clif->message(sd->fd, msg_txt(246));
 		return 1;
 	}
 
@@ -437,12 +464,12 @@ int guild_storage_additem(struct map_session_data* sd, struct guild_storage* sto
 
 	if (!itemdb_canguildstore(item_data, pc_get_group_level(sd)) || item_data->expire_time) {
 		//Check if item is storable. [Skotlex]
-		clif->message (sd->fd, msg_sd(sd,264));
+		clif->message (sd->fd, msg_txt(264));
 		return 1;
 	}
 
 	if( item_data->bound && item_data->bound != IBT_GUILD && !pc_can_give_bound_items(sd) ) {
-		clif->message(sd->fd, msg_sd(sd,294));
+		clif->message(sd->fd, msg_txt(294));
 		return 1;
 	}
 

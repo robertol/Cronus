@@ -1,12 +1,37 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_HOMUNCULUS_H
 #define MAP_HOMUNCULUS_H
 
 #include "map/status.h" // struct status_data, struct status_change
 #include "map/unit.h" // struct unit_data
+#include "common/cronus.h"
 #include "common/mmo.h"
 
 struct map_session_data;
@@ -99,12 +124,16 @@ enum homun_type {
 	HT_INVALID = -1, // Invalid Homunculus
 };
 
-/* homunculus.c interface */
-struct homunculus_interface {
+struct homun_dbs {
 	unsigned int exptable[MAX_LEVEL];
 	struct view_data viewdb[MAX_HOMUNCULUS_CLASS];
 	struct s_homunculus_db db[MAX_HOMUNCULUS_CLASS];
 	struct homun_skill_tree_entry skill_tree[MAX_HOMUNCULUS_CLASS][MAX_SKILL_TREE];
+};
+
+/* homunculus.c interface */
+struct homunculus_interface {
+	struct homun_dbs *dbs;
 	/* */
 	void (*init) (bool minimal);
 	void (*final) (void);
@@ -156,10 +185,10 @@ struct homunculus_interface {
 	int8 (*get_intimacy_grade) (struct homun_data *hd);
 };
 
-struct homunculus_interface *homun;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void homunculus_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct homunculus_interface *homun;
 
 #endif /* MAP_HOMUNCULUS_H */

@@ -1,16 +1,41 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 // Base Author: Haru @ http://herc.ws
 
 /// See sysinfo.h for a description of this file
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "sysinfo.h"
 
 #include "common/cbasetypes.h"
 #include "common/core.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/strlib.h"
 
 #include <stdio.h> // fopen
@@ -39,6 +64,8 @@ struct sysinfo_private {
 /// sysinfo.c interface source
 struct sysinfo_interface sysinfo_s;
 struct sysinfo_private sysinfo_p;
+
+struct sysinfo_interface *sysinfo;
 
 #define VCSTYPE_UNKNOWN 0
 #define VCSTYPE_GIT 1
@@ -197,7 +224,9 @@ enum windows_ver_suite {
 #define SYSINFO_COMPILER "Microsoft Visual C++ 2012 (v" EXPAND_AND_QUOTE(_MSC_VER) ")"
 #elif _MSC_VER >= 1800 && _MSC_VER < 1900
 #define SYSINFO_COMPILER "Microsoft Visual C++ 2013 (v" EXPAND_AND_QUOTE(_MSC_VER) ")"
-#else // < 1300 || >= 1900
+#elif _MSC_VER >= 1900 && _MSC_VER < 2000
+#define SYSINFO_COMPILER "Microsoft Visual C++ 2015 (v" EXPAND_AND_QUOTE(_MSC_VER) ")"
+#else // < 1300 || >= 2000
 #define SYSINFO_COMPILER "Microsoft Visual C++ v" EXPAND_AND_QUOTE(_MSC_VER)
 #endif
 #else
@@ -285,8 +314,8 @@ bool sysinfo_svn_get_revision(char **out) {
 				}
 			} else {
 				// Bin File format
-				if (fgets(line, sizeof(line), fp) == NULL) { printf("Can't get bin name\n"); } // Get the name
-				if (fgets(line, sizeof(line), fp) == NULL) { printf("Can't get entries kind\n"); } // Get the entries kind
+				if (fgets(line, sizeof(line), fp) == NULL) { printf("Nao pode obter o nome bin\n"); } // Get the name
+				if (fgets(line, sizeof(line), fp) == NULL) { printf("Nao pode obter os tipos de entrada\n"); } // Get the entries kind
 				if (fgets(line, sizeof(line), fp)) { // Get the rev numver
 					if (*out != NULL)
 						aFree(*out);
@@ -391,7 +420,7 @@ void sysinfo_osversion_retrieve(void) {
 #pragma warning (push)
 #pragma warning (disable : 4996)
 	if (!GetVersionEx((OSVERSIONINFO*) &osvi)) {
-		sysinfo->p->osversion = aStrdup("Unknown Version");
+		sysinfo->p->osversion = aStrdup("Versao desconhecida");
 		return;
 	}
 #pragma warning (pop)
@@ -586,7 +615,7 @@ void sysinfo_osversion_retrieve(void) {
 			else
 				StrBuf->AppendStr(&buf, " Server");
 		} else {
-			StrBuf->Printf(&buf, "Unknown Windows version %d.%d", osvi.dwMajorVersion, osvi.dwMinorVersion);
+			StrBuf->Printf(&buf, "Versao desconhecida do Windows %d.%d", osvi.dwMajorVersion, osvi.dwMinorVersion);
 		}
 	}
 
@@ -664,7 +693,7 @@ void sysinfo_cpu_retrieve(void) {
 		               (si.wProcessorRevision&0xff00)>>8,
 		               (si.wProcessorRevision&0xff));
 	} else {
-		StrBuf->AppendStr(&buf, "Unknown");
+		StrBuf->AppendStr(&buf, "Desconhecido");
 	}
 
 	sysinfo->p->cpu = aStrdup(StrBuf->Value(&buf));
@@ -698,7 +727,7 @@ void sysinfo_arch_retrieve(void) {
 	else if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64) // Itanium
 		sysinfo->p->arch = aStrdup("IA-64");
 	else
-		sysinfo->p->arch = aStrdup("Unknown");
+		sysinfo->p->arch = aStrdup("Desconhecido");
 }
 
 /**
@@ -721,7 +750,7 @@ void sysinfo_vcsrevision_src_retrieve(void) {
 		return;
 	}
 	sysinfo->p->vcstype = VCSTYPE_NONE;
-	sysinfo->p->vcsrevision_src = aStrdup("Unknown");
+	sysinfo->p->vcsrevision_src = aStrdup("Desconhecido");
 }
 #endif // WIN32
 
@@ -743,7 +772,7 @@ void sysinfo_vcstype_name_retrieve(void) {
 			sysinfo->p->vcstype_name = aStrdup("SVN");
 			break;
 		default:
-			sysinfo->p->vcstype_name = aStrdup("Exported");
+			sysinfo->p->vcstype_name = aStrdup("Exportada");
 			break;
 	}
 }
@@ -955,7 +984,7 @@ void sysinfo_vcsrevision_reload(void) {
 	if (sysinfo_svn_get_revision(&sysinfo->p->vcsrevision_scripts)) {
 		return;
 	}
-	sysinfo->p->vcsrevision_scripts = aStrdup("Unknown");
+	sysinfo->p->vcsrevision_scripts = aStrdup("Desconhecido");
 }
 
 /**

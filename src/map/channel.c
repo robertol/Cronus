@@ -1,7 +1,32 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
-#define HERCULES_CORE
+#define CRONUS_CORE
 
 #include "channel.h"
 
@@ -14,7 +39,7 @@
 #include "common/cbasetypes.h"
 #include "common/conf.h"
 #include "common/db.h"
-#include "common/malloc.h"
+#include "common/memmgr.h"
 #include "common/nullpo.h"
 #include "common/random.h"
 #include "common/showmsg.h"
@@ -28,6 +53,7 @@
 #include <string.h>
 
 struct channel_interface channel_s;
+struct channel_interface *channel;
 
 static struct Channel_Config channel_config;
 
@@ -254,21 +280,22 @@ void channel_send(struct channel_data *chan, struct map_session_data *sd, const 
 {
 	char message[150];
 	nullpo_retv(chan);
+	nullpo_retv(msg);
 
 	if (sd && chan->msg_delay != 0
 	 && DIFF_TICK(sd->hchsysch_tick + chan->msg_delay*1000, timer->gettick()) > 0
 	 && !pc_has_permission(sd, PC_PERM_HCHSYS_ADMIN)) {
-		clif->messagecolor_self(sd->fd, COLOR_RED, msg_sd(sd,1455));
+		clif->messagecolor_self(sd->fd, COLOR_RED, msg_txt(1455));
 		return;
 	} else if (sd) {
-		snprintf(message, 150, "[ #%s ] %s : %s",chan->name,sd->status.name, msg);
+		safesnprintf(message, 150, "[ #%s ] %s : %s", chan->name, sd->status.name, msg);
 		clif->channel_msg(chan,sd,message);
 		if (chan->type == HCS_TYPE_IRC)
 			ircbot->relay(sd->status.name,msg);
 		if (chan->msg_delay != 0)
 			sd->hchsysch_tick = timer->gettick();
 	} else {
-		snprintf(message, 150, "[ #%s ] %s",chan->name, msg);
+		safesnprintf(message, 150, "[ #%s ] %s", chan->name, msg);
 		clif->channel_msg2(chan, message);
 		if (chan->type == HCS_TYPE_IRC)
 			ircbot->relay(NULL, msg);
@@ -295,13 +322,13 @@ void channel_join_sub(struct channel_data *chan, struct map_session_data *sd, bo
 
 	if (!stealth && (chan->options&HCS_OPT_ANNOUNCE_JOIN)) {
 		char message[60];
-		sprintf(message, "#%s '%s' joined",chan->name,sd->status.name);
+		sprintf(message, "#%s '%s' entrou",chan->name,sd->status.name);
 		clif->channel_msg(chan,sd,message);
 	}
 
 	/* someone is cheating, we kindly disconnect the bastard */
 	if (sd->channel_count > 200) {
-		set_eof(sd->fd);
+		sockt->eof(sd->fd);
 	}
 
 }
@@ -328,6 +355,7 @@ enum channel_operation_status channel_join(struct channel_data *chan, struct map
 
 	nullpo_retr(HCS_STATUS_FAIL, chan);
 	nullpo_retr(HCS_STATUS_FAIL, sd);
+	nullpo_retr(HCS_STATUS_FAIL, password);
 
 	if (idb_exists(chan->users, sd->status.char_id)) {
 		return HCS_STATUS_ALREADY;
@@ -348,9 +376,9 @@ enum channel_operation_status channel_join(struct channel_data *chan, struct map
 	if (!silent && !(chan->options&HCS_OPT_ANNOUNCE_JOIN)) {
 		char output[CHAT_SIZE_MAX];
 		if (chan->type == HCS_TYPE_MAP) {
-			sprintf(output, msg_sd(sd,1435), chan->name, map->list[chan->m].name); // You're now in the '#%s' channel for '%s'
+			sprintf(output, msg_txt(1435), chan->name, map->list[chan->m].name); // You're now in the '#%s' channel for '%s'
 		} else {
-			sprintf(output, msg_sd(sd,1403), chan->name); // You're now in the '%s' channel
+			sprintf(output, msg_txt(1403), chan->name); // You're now in the '%s' channel
 		}
 		clif->messagecolor_self(sd->fd, COLOR_DEFAULT, output);
 	}
@@ -360,7 +388,7 @@ enum channel_operation_status channel_join(struct channel_data *chan, struct map
 		int i;
 		for (i = 0; i < MAX_GUILDALLIANCE; i++) {
 			struct guild *sg = NULL;
-			if (g->alliance[i].opposition == 0 && g->alliance[i].guild_id && (sg = guild->search(g->alliance[i].guild_id))) {
+			if (g->alliance[i].opposition == 0 && g->alliance[i].guild_id && (sg = guild->search(g->alliance[i].guild_id)) != NULL) {
 				if (!(sg->channel->banned && idb_exists(sg->channel->banned, sd->status.account_id))) {
 					channel->join_sub(sg->channel, sd, stealth);
 				}
@@ -428,7 +456,7 @@ void channel_leave(struct channel_data *chan, struct map_session_data *sd)
 		channel->delete(chan);
 	} else if (!channel->config->closing && (chan->options & HCS_OPT_ANNOUNCE_JOIN)) {
 		char message[60];
-		sprintf(message, "#%s '%s' left",chan->name,sd->status.name);
+		sprintf(message, "#%s '%s' saiu",chan->name,sd->status.name);
 		clif->channel_msg(chan,sd,message);
 	}
 
@@ -444,6 +472,7 @@ void channel_leave(struct channel_data *chan, struct map_session_data *sd)
  */
 void channel_quit(struct map_session_data *sd)
 {
+	nullpo_retv(sd);
 	while (sd->channel_count > 0) {
 		// Loop downward to avoid unnecessary array compactions by channel_leave
 		struct channel_data *chan = sd->channels[sd->channel_count-1];
@@ -460,10 +489,11 @@ void channel_quit(struct map_session_data *sd)
 /**
  * Joins the local map channel.
  *
- * @param sd The target character
+ * @param sd The target character (sd must be non null)
  */
 void channel_map_join(struct map_session_data *sd)
 {
+	nullpo_retv(sd);
 	if (sd->state.autotrade || sd->state.standalone)
 		return;
 	if (!map->list[sd->bl.m].channel) {
@@ -474,18 +504,20 @@ void channel_map_join(struct map_session_data *sd)
 		map->list[sd->bl.m].channel->m = sd->bl.m;
 	}
 
-	channel->join(map->list[sd->bl.m].channel, sd, NULL, false);
+	channel->join(map->list[sd->bl.m].channel, sd, "", false);
 }
 
 void channel_irc_join(struct map_session_data *sd)
 {
 	struct channel_data *chan = ircbot->channel;
+
+	nullpo_retv(sd);
 	if (sd->state.autotrade || sd->state.standalone)
 		return;
 	if (channel->config->irc_name[0] == '\0')
 		return;
 	if (chan)
-		channel->join(chan, sd, NULL, false);
+		channel->join(chan, sd, "", false);
 }
 
 /**
@@ -547,12 +579,13 @@ void channel_guild_leave_alliance(const struct guild *g_source, const struct gui
 /**
  * Makes a character quit all guild-related channels.
  *
- * @param sd The character
+ * @param sd The character (must be non null)
  */
 void channel_quit_guild(struct map_session_data *sd)
 {
 	unsigned char i;
 
+	nullpo_retv(sd);
 	for (i = 0; i < sd->channel_count; i++) {
 		struct channel_data *chan = sd->channels[i];
 
@@ -620,9 +653,9 @@ void read_channels_config(void)
 			if( libconfig->setting_lookup_string(settings, "irc_channel_network", &irc_server) ) {
 				if( !strstr(irc_server,":") ) {
 					channel->config->irc = false;
-					ShowWarning("channels.conf : network port wasn't found in 'irc_channel_network', disabling irc channel...\n");
+					ShowWarning("channels.conf : a porta de rede nao foi encontrada no 'irc_channel_network', desabilitando o canal irc...\n");
 				} else {
-					unsigned char d = 0, dlen = strlen(irc_server);
+					unsigned int d = 0, dlen = (int)strlen(irc_server);
 					char server[40];
 					if (dlen > 39)
 						dlen = 39;
@@ -640,13 +673,13 @@ void read_channels_config(void)
 				}
 			} else {
 				channel->config->irc = false;
-				ShowWarning("channels.conf : irc channel enabled but irc_channel_network wasn't found, disabling irc channel...\n");
+				ShowWarning("channels.conf : canal irc habilitado mas irc_channel_network nao foi encontrado, desabilitando canal irc...\n");
 			}
 			if( libconfig->setting_lookup_string(settings, "irc_channel_channel", &irc_channel) )
 				safestrncpy(channel->config->irc_channel, irc_channel, 50);
 			else {
 				channel->config->irc = false;
-				ShowWarning("channels.conf : irc channel enabled but irc_channel_channel wasn't found, disabling irc channel...\n");
+				ShowWarning("channels.conf : canal irc habilitado mas irc_channel_channel nao foi encontrado, desabilitando canal irc...\n");
 			}
 			if( libconfig->setting_lookup_string(settings, "irc_channel_nick", &irc_nick) ) {
 				if( strcmpi(irc_nick,"Hercules_chSysBot") == 0 ) {
@@ -655,7 +688,7 @@ void read_channels_config(void)
 					safestrncpy(channel->config->irc_nick, irc_nick, 40);
 			} else {
 				channel->config->irc = false;
-				ShowWarning("channels.conf : irc channel enabled but irc_channel_nick wasn't found, disabling irc channel...\n");
+				ShowWarning("channels.conf : canal irc habilitado mas irc_channel_nick nao foi encontrado, desabilitando canal irc...\n");
 			}
 			if( libconfig->setting_lookup_string(settings, "irc_channel_nick_pw", &irc_nick_pw) ) {
 				safestrncpy(channel->config->irc_nick_pw, irc_nick_pw, 30);
@@ -707,7 +740,7 @@ void read_channels_config(void)
 		if (k < channel->config->colors_count) {
 			channel->config->local_color = k;
 		} else {
-			ShowError("channels.conf: unknown color '%s' for 'map_local_channel_color', disabling '#%s'...\n",local_color,local_name);
+			ShowError("channels.conf: cor desconhecida '%s' para 'map_local_channel_color', desabilitando '#%s'...\n",local_color,local_name);
 			channel->config->local = false;
 		}
 
@@ -721,7 +754,7 @@ void read_channels_config(void)
 		if( k < channel->config->colors_count ) {
 			channel->config->ally_color = k;
 		} else {
-			ShowError("channels.conf: unknown color '%s' for 'ally_channel_color', disabling '#%s'...\n",ally_color,ally_name);
+			ShowError("channels.conf: cor desconhecida '%s' para 'ally_channel_color', desabilitando '#%s'...\n",ally_color,ally_name);
 			channel->config->ally = false;
 		}
 
@@ -735,7 +768,7 @@ void read_channels_config(void)
 		if (k < channel->config->colors_count) {
 			channel->config->irc_color = k;
 		} else {
-			ShowError("channels.conf: unknown color '%s' for 'irc_channel_color', disabling '#%s'...\n",irc_color,irc_name);
+			ShowError("channels.conf: cor desconhecida '%s' para 'irc_channel_color', desabilitando '#%s'...\n",irc_color,irc_name);
 			channel->config->irc = false;
 		}
 
@@ -753,14 +786,14 @@ void read_channels_config(void)
 
 				ARR_FIND(0, channel->config->colors_count, k, strcmpi(channel->config->colors_name[k],color) == 0);
 				if (k == channel->config->colors_count) {
-					ShowError("channels.conf: unknown color '%s' for channel '%s', skipping channel...\n",color,name);
+					ShowError("channels.conf: cor desonhecida '%s' para o canal '%s', pulando canal...\n",color,name);
 					continue;
 				}
 				if (strcmpi(name, channel->config->local_name) == 0
 				 || strcmpi(name, channel->config->ally_name) == 0
 				 || strcmpi(name, channel->config->irc_name) == 0
 				 || strdb_exists(channel->db, name)) {
-					ShowError("channels.conf: duplicate channel '%s', skipping channel...\n",name);
+					ShowError("channels.conf: canal duplicado '%s', pulando canal...\n",name);
 					continue;
 
 				}
@@ -768,9 +801,9 @@ void read_channels_config(void)
 			}
 		}
 
-		ShowStatus("Done reading '"CL_WHITE"%d"CL_RESET"' channels in '"CL_WHITE"%s"CL_RESET"'.\n", db_size(channel->db), config_filename);
-		libconfig->destroy(&channels_conf);
+		ShowStatus("Realizada leitura de '"CL_WHITE"%d"CL_RESET"' canais em '"CL_WHITE"%s"CL_RESET"'.\n", db_size(channel->db), config_filename);
 	}
+	libconfig->destroy(&channels_conf);
 }
 
 /*==========================================

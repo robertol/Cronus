@@ -1,12 +1,36 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_QUEST_H
 #define MAP_QUEST_H
 
 #include "map/map.h" // TBL_PC
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/conf.h"
 
 #define MAX_QUEST_DB (60355+1) // Highest quest ID + 1
@@ -40,7 +64,7 @@ enum quest_check_type {
 };
 
 struct quest_interface {
-	struct quest_db *db_data[MAX_QUEST_DB]; ///< Quest database
+	struct quest_db **db_data; ///< Quest database
 	struct quest_db dummy;                  ///< Dummy entry for invalid quest lookups
 	/* */
 	void (*init) (bool minimal);
@@ -61,10 +85,10 @@ struct quest_interface {
 	struct quest_db *(*read_db_sub) (config_setting_t *cs, int n, const char *source);
 };
 
-struct quest_interface *quest;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void quest_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct quest_interface *quest;
 
 #endif /* MAP_QUEST_H */

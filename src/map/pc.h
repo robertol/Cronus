@@ -1,11 +1,33 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_PC_H
 #define MAP_PC_H
-
-#include "config/core.h" // AUTOLOOTITEM_SIZE, RENEWAL, SECURE_NPCTIMEOUT
 
 #include "map/battle.h" // battle
 #include "map/battleground.h" // enum bg_queue_types
@@ -19,7 +41,7 @@
 #include "map/status.h" // enum sc_type, OPTION_*
 #include "map/unit.h" // struct unit_data, struct view_data
 #include "map/vending.h" // struct s_vending
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 #include "common/ers.h" // struct eri
 #include "common/mmo.h" // JOB_*, MAX_FAME_LIST, struct fame_list, struct mmo_charstatus, NEW_CARTS
 
@@ -206,6 +228,7 @@ struct map_session_data {
 		unsigned int itemcheck : 1;
 		unsigned int standalone : 1;/* [Ind/Hercules <3] */
 		unsigned int loggingout : 1;
+		unsigned int warp_clean : 1;
 	} state;
 	struct {
 		unsigned char no_weapon_damage, no_magic_damage, no_misc_damage;
@@ -540,10 +563,7 @@ END_ZEROED_BLOCK;
 	unsigned short (*parse_cmd_func)(int fd, struct map_session_data *sd); ///< parse_cmd_func used by this player
 
 	unsigned char delayed_damage;//ref. counter bugreport:7307 [Ind/Hercules]
-
-	/* HPM Custom Struct */
-	struct HPluginData **hdata;
-	unsigned int hdatac;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 
 	/* expiration_time timer id */
 	int expiration_tid;
@@ -569,8 +589,6 @@ END_ZEROED_BLOCK;
 		bool claimPrize;
 	} roulette;
 
-	uint8 lang_id;
-	
 	// temporary debugging of bug #3504
 	const char* delunit_prevfile;
 	int delunit_prevline;
@@ -758,6 +776,7 @@ struct autotrade_vending {
 	struct item list[MAX_VENDING];
 	struct s_vending vending[MAX_VENDING];
 	unsigned char vend_num;
+	struct hplugin_data_store *hdata; ///< HPM Plugin Data Store
 };
 
 /*=====================================
@@ -914,7 +933,7 @@ END_ZEROED_BLOCK; /* End */
 	int (*resetfeel) (struct map_session_data *sd);
 	int (*resethate) (struct map_session_data *sd);
 	int (*equipitem) (struct map_session_data *sd,int n,int req_pos);
-	void (*equipitem_pos) (struct map_session_data *sd, struct item_data *id, int pos);
+	void (*equipitem_pos) (struct map_session_data *sd, struct item_data *id, int n, int pos);
 	int (*unequipitem) (struct map_session_data *sd,int n,int flag);
 	void (*unequipitem_pos) (struct map_session_data *sd, int n, int pos);
 	int (*checkitem) (struct map_session_data *sd);
@@ -1067,14 +1086,15 @@ END_ZEROED_BLOCK; /* End */
 	void (*autotrade_start) (struct map_session_data *sd);
 	void (*autotrade_prepare) (struct map_session_data *sd);
 	void (*autotrade_populate) (struct map_session_data *sd);
-
-	int (*check_job_name) (const char *name);
+	int (*autotrade_final) (DBKey key, DBData *data, va_list ap);
+	
+	int (*have_magnifier) (struct map_session_data *sd);
 };
 
-struct pc_interface *pc;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void pc_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct pc_interface *pc;
 
 #endif /* MAP_PC_H */

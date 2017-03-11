@@ -1,11 +1,35 @@
-// Copyright (c) Hercules Dev Team, licensed under GNU GPL.
-// See the LICENSE file
-// Portions Copyright (c) Athena Dev Teams
+/*==================================================================\\
+//                   _____                                          ||
+//                  /  __ \                                         ||
+//                  | /  \/_ __ ___  _ __  _   _ ___                ||
+//                  | |   | '__/ _ \| '_ \| | | / __|               ||
+//                  | \__/\ | | (_) | | | | |_| \__ \               ||
+//                   \____/_|  \___/|_| |_|\__,_|___/               ||
+//                        Source - 2016                             ||
+//==================================================================||
+// = Código Base:                                                   ||
+// - eAthena/Hercules/Cronus                                        ||
+//==================================================================||
+// = Sobre:                                                         ||
+// Este software é livre: você pode redistribuí-lo e/ou modificá-lo ||
+// sob os termos da GNU General Public License conforme publicada   ||
+// pela Free Software Foundation, tanto a versão 3 da licença, ou   ||
+// (a seu critério) qualquer versão posterior.                      ||
+//                                                                  ||
+// Este programa é distribuído na esperança de que possa ser útil,  ||
+// mas SEM QUALQUER GARANTIA; mesmo sem a garantia implícita de     ||
+// COMERCIALIZAÇÃO ou ADEQUAÇÃO A UM DETERMINADO FIM. Veja a        ||
+// GNU General Public License para mais detalhes.                   ||
+//                                                                  ||
+// Você deve ter recebido uma cópia da Licença Pública Geral GNU    ||
+// juntamente com este programa. Se não, veja:                      ||
+// <http://www.gnu.org/licenses/>.                                  ||
+//==================================================================*/
 
 #ifndef MAP_INTIF_H
 #define MAP_INTIF_H
 
-#include "common/cbasetypes.h"
+#include "common/cronus.h"
 
 /**
  * Declarations
@@ -43,10 +67,10 @@ struct intif_interface {
 	int (*parse) (int fd);
 	int (*create_pet)(int account_id, int char_id, short pet_type, short pet_lv, short pet_egg_id,
 	                  short pet_equip, short intimate, short hungry, char rename_flag, char incubate, char *pet_name);
-	int (*broadcast) (const char* mes, size_t len, int type);
-	int (*broadcast2) (const char* mes, size_t len, unsigned int fontColor, short fontType, short fontSize, short fontAlign, short fontY);
+	int (*broadcast) (const char* mes, uint32_t len, int type);
+	int (*broadcast2) (const char* mes, uint32_t len, unsigned int fontColor, short fontType, short fontSize, short fontAlign, short fontY);
 	int (*main_message) (struct map_session_data* sd, const char* message);
-	int (*wis_message) (struct map_session_data *sd,char *nick,char *mes,size_t mes_len);
+	int (*wis_message) (struct map_session_data *sd, const char *nick, const char *mes, int mes_len);
 	int (*wis_message_to_gm) (char *Wisp_name, int permission, char *mes);
 	int (*saveregistry) (struct map_session_data *sd);
 	int (*request_registry) (struct map_session_data *sd, int flag);
@@ -68,7 +92,7 @@ struct intif_interface {
 	int (*guild_memberinfoshort) (int guild_id, int account_id, int char_id, int online, int lv, int class_);
 	int (*guild_break) (int guild_id);
 	int (*guild_message) (int guild_id, int account_id, const char *mes, int len);
-	int (*guild_change_gm) (int guild_id, const char* name, size_t len);
+	int (*guild_change_gm) (int guild_id, const char* name, int len);
 	int (*guild_change_basicinfo) (int guild_id, int type, const void *data, int len);
 	int (*guild_change_memberinfo) (int guild_id, int account_id, int char_id, int type, const void *data, int len);
 	int (*guild_position) (int guild_id, int idx, struct guild_position *p);
@@ -182,10 +206,10 @@ struct intif_interface {
 	void (*pDeleteHomunculusOk) (int fd);
 };
 
-struct intif_interface *intif;
-
-#ifdef HERCULES_CORE
+#ifdef CRONUS_CORE
 void intif_defaults(void);
-#endif // HERCULES_CORE
+#endif // CRONUS_CORE
+
+HPShared struct intif_interface *intif;
 
 #endif /* MAP_INTIF_H */
